@@ -7,6 +7,7 @@ internal static class Program
     [STAThread]
     static int Main(string[] args)
     {
+        if (args.SequenceEqual(new[] { "--restart-streamer" })) return StreamerControl.RestartInstalledStreamer();
         ApplicationConfiguration.Initialize();
         if (args.Contains("--self-test")) return SelfTests.Run();
         if (args.Length == 2 && args[0] == "--render-preview")
@@ -28,7 +29,7 @@ internal static class Program
         if (!first)
         {
             if (!SingleInstance.ActivateExisting())
-                MessageBox.Show("The existing library window did not respond. Close that instance in Task Manager and try again.", "Steam VR Library", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("The existing library window did not respond. Close that instance in Task Manager and try again.", "Virtual Desktop Unlock", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return 0;
         }
         using var mainForm = new LibraryForm();
@@ -69,12 +70,18 @@ public sealed class LibraryForm : Form
     private static readonly Color Accent = Color.FromArgb(108, 218, 188);
     private readonly bool preview;
     private readonly LibraryStore store;
+    private readonly SharedOverrides sharedOverrides;
     private readonly ListView steam = MakeList();
     private readonly ListView vr = MakeList();
     private readonly TextBox search = new() { PlaceholderText = "Search games or Steam app ID…", BorderStyle = BorderStyle.FixedSingle, Dock = DockStyle.Fill };
     private readonly Label steamCount = TextLabel("Loading installed games…", Muted, 9);
     private readonly Label vrCount = TextLabel("Saved on this PC", Muted, 9);
     private readonly Label status = TextLabel("Loading…", Muted, 9);
+    private readonly Label connectionStatus = TextLabel("", Accent, 10);
+    private readonly LinkLabel restart = new() { Text = "Restart Streamer and reconnect to apply custom additions", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, LinkColor = Accent, ActiveLinkColor = Color.White, VisitedLinkColor = Accent, Visible = false, AccessibleName = "Restart Streamer" };
+    private readonly IStreamerControl streamerControl;
+    private readonly System.Windows.Forms.Timer restartTimer = new() { Interval = 3000 };
+    private uint[]? syncedIds;
     private readonly Button add = MakeButton("Add to VR  →", primary: true);
     private readonly Button remove = MakeButton("←  Remove");
     private readonly Button launch = MakeButton("Launch selected");
@@ -89,11 +96,14 @@ public sealed class LibraryForm : Form
     private bool ready;
     private bool busy;
 
-    public LibraryForm(bool preview = false, string? libraryPath = null)
+    public LibraryForm(bool preview = false, string? libraryPath = null, IStreamerControl? streamerControl = null)
     {
         this.preview = preview;
+        this.streamerControl = streamerControl ?? new StreamerControl();
         store = new LibraryStore(libraryPath ?? Path.Combine(AppContext.BaseDirectory, "Data", "library.json"));
-        Text = "Steam VR Library — v0.1.0";
+        sharedOverrides = new SharedOverrides(preview || libraryPath != null
+            ? Path.Combine(Path.GetDirectoryName(store.Path)!, "GameOverrides.xml") : SharedOverrides.DefaultPath);
+        Text = "Virtual Desktop Unlock — v0.1.2";
         Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath!) ?? SystemIcons.Application;
         BackColor = Background;
         ForeColor = Color.White;
@@ -103,30 +113,49 @@ public sealed class LibraryForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28, 22, 28, 18), ColumnCount = 1, RowCount = 7, BackColor = Background };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28, 22, 28, 18), ColumnCount = 1, RowCount = 8, BackColor = Background };
         foreach (var height in new[] { 50, 30, 54, 48 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         Controls.Add(root);
 
         var titleRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        titleRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
-        var title = TextLabel("Steam VR Library", Color.White, 24, FontStyle.Bold);
-        titleRow.Controls.Add(title, 0, 0);
+        var title = TextLabel("Virtual Desktop Unlock", Color.White, 24, FontStyle.Bold);
+        title.AutoSize = true;
+        title.Dock = DockStyle.None;
+        title.Margin = new Padding(0, 0, 10, 0);
+        var heading = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty };
+        heading.Controls.Add(title);
+        var settings = MakeButton("⚙");
+        settings.Size = new Size(40, 40);
+        settings.Margin = new Padding(0, 0, 0, 0);
+        settings.Font = new Font("Segoe UI Symbol", 21);
+        settings.AccessibleName = "Settings";
+        tip.SetToolTip(settings, "Settings");
+        settings.Click += (_, _) =>
+        {
+            using var dialog = new SettingsForm(new WindowsStartupRegistration());
+            dialog.Icon = Icon;
+            dialog.ShowDialog(this);
+        };
+        heading.Controls.Add(settings);
+        titleRow.Controls.Add(heading, 0, 0);
         refresh.Dock = DockStyle.Fill;
         refresh.Margin = new Padding(0, 3, 0, 8);
         titleRow.Controls.Add(refresh, 1, 0);
         root.Controls.Add(titleRow, 0, 0);
         root.Controls.Add(TextLabel("Choose the games you want to play in VR.", Muted, 11), 0, 1);
 
-        var note = TextLabel("COMPANION LIBRARY   ·   Your selections are saved here. Virtual Desktop’s Games tab stays unchanged.", Accent, 10);
-        note.BackColor = Color.FromArgb(22, 48, 49);
-        note.Padding = new Padding(14, 0, 8, 0);
-        note.Margin = new Padding(0, 5, 0, 7);
-        tip.SetToolTip(note, "The initial selection comes from installed Steam games in Virtual Desktop’s cache. Later moves affect only this companion library.");
-        root.Controls.Add(note, 0, 2);
+        connectionStatus.Padding = new Padding(14, 0, 8, 0);
+        connectionStatus.Margin = new Padding(0, 5, 0, 7);
+        connectionStatus.AccessibleName = "Virtual Desktop status";
+        tip.SetToolTip(connectionStatus, "Shows whether Streamer is running and this app has loaded your library. Pending changes are applied using the restart link below.");
+        root.Controls.Add(connectionStatus, 0, 2);
         search.BackColor = Card;
         search.ForeColor = Color.White;
         search.Font = new Font("Segoe UI", 11);
@@ -144,7 +173,7 @@ public sealed class LibraryForm : Form
         lists.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 154));
         lists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         lists.Controls.Add(MakeCard("Steam games", "Not in your VR library", steamCount, steam), 0, 0);
-        lists.Controls.Add(MakeCard("My VR library", "Your personal selection", vrCount, vr), 2, 0);
+        lists.Controls.Add(MakeCard("VD cache games", "Selected for the headset Games panel", vrCount, vr), 2, 0);
         var center = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(12, 0, 12, 0) };
         center.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         center.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
@@ -164,10 +193,15 @@ public sealed class LibraryForm : Form
         root.Controls.Add(actions, 0, 5);
         status.AutoEllipsis = true;
         root.Controls.Add(status, 0, 6);
+        root.Controls.Add(restart, 0, 7);
+        tip.SetToolTip(restart, "Close and relaunch Virtual Desktop Streamer. Windows may request administrator permission. Then reconnect your headset.");
+        restart.LinkClicked += async (_, _) => await RestartStreamerAsync();
+        restartTimer.Tick += (_, _) => UpdateRestartNotice();
+        if (!preview) restartTimer.Start();
         steam.AccessibleName = "Installed Steam games not in your VR library";
-        vr.AccessibleName = "My companion VR library";
-        tip.SetToolTip(add, "Move selected Steam games into your saved companion VR library.");
-        tip.SetToolTip(remove, "Remove selected games from this VR library. Your Steam installation is untouched.");
+        vr.AccessibleName = "VD cache games";
+        tip.SetToolTip(add, "Save selected games and export their Steam IDs to the Virtual Desktop startup helper. Restart Streamer to apply.");
+        tip.SetToolTip(remove, "Remove custom additions for the next Streamer restart. Native VR games may still appear automatically in Virtual Desktop.");
         tip.SetToolTip(launch, "Launch the selected game through Steam. Connect Virtual Desktop first; a VR mod must already be installed for flat-screen games.");
         search.TextChanged += (_, _) => Populate();
         steam.SelectedIndexChanged += (_, _) => SelectionChanged(steam, vr);
@@ -181,7 +215,7 @@ public sealed class LibraryForm : Form
         vr.DoubleClick += (_, _) => MoveGames(false);
         details.Click += (_, _) => MessageBox.Show(this,
             (scan.Warnings.Count == 0 ? "All available Steam folders were scanned successfully." : string.Join("\n\n", scan.Warnings))
-            + "\n\nSelections: " + store.Path + "\n\nVirtual Desktop’s cache is read only for the initial selection. This app never writes to Steam or Virtual Desktop settings.",
+            + "\n\nSelections: " + store.Path + "\n\nShared overrides: " + sharedOverrides.Path + "\n\nRequires the 0.1.1 startup helper. Restart Streamer after changes. Native VR games are detected automatically and cannot be hidden by removing a custom override.",
             "Library details", MessageBoxButtons.OK, MessageBoxIcon.Information);
         if (!preview) Shown += async (_, _) => await ReloadAsync();
         UpdateButtons();
@@ -236,7 +270,7 @@ public sealed class LibraryForm : Form
             }
             scan = next; state = saved; previous = null; ready = true;
             Populate();
-            status.Text = scan.Warnings.Count > 0 ? $"Loaded {scan.Games.Count} Steam games. Some folders could not be read — see Scan details." : "Saved automatically  ·  Connect Virtual Desktop before launching a VR game.";
+            SyncOverrides("Loaded library");
         }
         catch (Exception e)
         { ready = false; status.Text = "Could not load the library. Your saved selections were left unchanged."; MessageBox.Show(this, e.Message, "Could not load library", MessageBoxButtons.OK, MessageBoxIcon.Error); }
@@ -246,7 +280,7 @@ public sealed class LibraryForm : Form
     public void LoadPreview(ScanResult? previewScan = null)
     {
         scan = previewScan ?? SteamScanner.Scan();
-        state = store.Load() ?? new LibraryState { Games = scan.Games.Where(g => scan.CachedVrIds.Contains(g.Id)).ToList() };
+        state = store.Load() ?? new LibraryState { Games = scan.Games.Where(g => scan.CachedVrIds.Contains(g.Id)).Select(g => g with { Origin = "Imported from Virtual Desktop cache" }).ToList() };
         ready = true;
         Populate();
         status.Text = "Saved automatically  ·  Connect Virtual Desktop before launching a VR game.";
@@ -299,6 +333,8 @@ public sealed class LibraryForm : Form
 
     private void UpdateButtons()
     {
+        UpdateRestartNotice();
+        restart.Enabled = ready && !busy;
         add.Enabled = ready && !busy && steam.SelectedItems.Count > 0;
         remove.Enabled = ready && !busy && vr.SelectedItems.Count > 0;
         launch.Enabled = ready && !busy && steam.SelectedItems.Count + vr.SelectedItems.Count == 1;
@@ -319,7 +355,7 @@ public sealed class LibraryForm : Form
         try
         {
             store.Save(next); previous = state; state = next; Populate();
-            status.Text = $"Saved  ·  {selected.Count} game{(selected.Count == 1 ? "" : "s")} {(toVr ? "added to" : "removed from")} your VR library.";
+            SyncOverrides($"Saved {selected.Count} game{(selected.Count == 1 ? "" : "s")} {(toVr ? "addition" : "removal")}");
         }
         catch (Exception e) { MessageBox.Show(this, e.Message, "Could not save — move cancelled", MessageBoxButtons.OK, MessageBoxIcon.Error); }
     }
@@ -327,8 +363,60 @@ public sealed class LibraryForm : Form
     private void Undo()
     {
         if (previous == null || busy) return;
-        try { store.Save(previous); state = previous; previous = null; Populate(); status.Text = "Saved  ·  Last move undone."; }
+        try { store.Save(previous); state = previous; previous = null; Populate(); SyncOverrides("Last move undone"); }
         catch (Exception e) { MessageBox.Show(this, e.Message, "Could not undo", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+    }
+
+    private void SyncOverrides(string action)
+    {
+        try
+        {
+            sharedOverrides.Save(state);
+            syncedIds = state.Games.Select(g => uint.Parse(g.Id)).Distinct().Order().ToArray();
+            status.Text = action;
+            UpdateRestartNotice();
+        }
+        catch (Exception e)
+        {
+            status.Text = "Saved locally; Virtual Desktop sync failed. Refresh to retry.";
+            MessageBox.Show(this, e.Message, "Could not sync Virtual Desktop overrides", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void UpdateRestartNotice()
+    {
+        UpdateConnectionStatus();
+        if (!busy) restart.Visible = syncedIds != null && !streamerControl.IsApplied(syncedIds);
+    }
+
+    internal void UpdateConnectionStatus()
+    {
+        bool running = streamerControl.IsRunning;
+        connectionStatus.Text = $"VIRTUAL DESKTOP   ·   Streamer: {(running ? "Running" : "Not running")}   ·   Library: {(ready ? "Loaded" : "Not loaded")}";
+        connectionStatus.BackColor = !ready ? Color.FromArgb(83, 52, 18)
+            : running ? Color.FromArgb(22, 48, 49) : Color.FromArgb(77, 28, 36);
+        connectionStatus.ForeColor = !ready ? Color.FromArgb(255, 192, 105)
+            : running ? Accent : Color.FromArgb(255, 151, 160);
+    }
+
+    internal async Task RestartStreamerAsync()
+    {
+        if (busy || syncedIds == null) return;
+        busy = true; UpdateButtons(); status.Text = "Restarting Streamer…";
+        try
+        {
+            await streamerControl.RestartAsync();
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (!streamerControl.IsApplied(syncedIds) && DateTime.UtcNow < deadline) await Task.Delay(250);
+            if (!streamerControl.IsApplied(syncedIds)) throw new IOException("Streamer restarted, but the helper has not confirmed your selection. Try again or check the integration installation.");
+            status.Text = "Streamer restarted. Reconnect your headset and reopen Games.";
+        }
+        catch (Exception e)
+        {
+            status.Text = "Streamer restart was not completed. Click the restart message to retry.";
+            if (!preview) MessageBox.Show(this, e.Message, "Could not apply library changes", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally { busy = false; UpdateButtons(); UpdateRestartNotice(); }
     }
 
     private void LaunchSelected()
@@ -364,7 +452,7 @@ public sealed class LibraryForm : Form
     }
 
     protected override void Dispose(bool disposing)
-    { if (disposing) tip.Dispose(); base.Dispose(disposing); }
+    { if (disposing) { restartTimer.Dispose(); tip.Dispose(); } base.Dispose(disposing); }
 }
 
 internal sealed class ThemeButton : Button

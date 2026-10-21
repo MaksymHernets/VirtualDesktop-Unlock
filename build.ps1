@@ -2,7 +2,7 @@
 param([string]$StreamerPath,[switch]$SkipTests)
 $ErrorActionPreference='Stop'
 $root=$PSScriptRoot
-$version='0.1.0'
+$version='0.1.2'
 $env:DOTNET_CLI_HOME=Join-Path $root '.dotnet-build'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT='1'
 $env:DOTNET_GENERATE_ASPNET_CERTIFICATE='false'
@@ -23,7 +23,7 @@ if($LASTEXITCODE -ne 0){throw 'Runtime helper build failed.'}
 Copy-Item -LiteralPath (Join-Path $root 'src\RuntimeOverrides\RuntimeHook.config') -Destination (Join-Path $hook 'VirtualDesktop.Streamer.exe.config')
 [pscustomobject]@{Version=$version;StreamerVersion='1.34.23.0';StreamerSHA256='FEAD548C57DF539006E6C97A7A29D46FDE172F756F40D65DBDB77ABAAFA3AEAD';HelperSHA256=(Get-FileHash -LiteralPath (Join-Path $hook 'VirtualDesktop.LibraryOverrides.dll')).Hash;ConfigSHA256=(Get-FileHash -LiteralPath (Join-Path $hook 'VirtualDesktop.Streamer.exe.config')).Hash} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $hook 'manifest.json')
 if(!$SkipTests){
-    $test=Start-Process -FilePath (Join-Path $publish 'Steam VR Library.exe') -ArgumentList '--self-test' -WindowStyle Hidden -PassThru
+    $test=Start-Process -FilePath (Join-Path $publish 'Virtual Desktop Unlock.exe') -ArgumentList '--self-test' -WindowStyle Hidden -PassThru
     $test.WaitForExit()
     Get-Content -LiteralPath (Join-Path $publish 'self-test-result.txt') | Write-Output
     if($test.ExitCode -ne 0){throw 'Companion tests failed.'}
@@ -35,15 +35,34 @@ if(!$SkipTests){
     if($LASTEXITCODE -ne 0){throw 'AppDomain startup-loading smoke test failed.'}
     if($StreamerPath){
         $oldData=$env:VD_LIBRARY_TEST_DATA;$oldDelay=$env:VD_LIBRARY_TEST_DELAYED;$oldLog=$env:VD_LIBRARY_OVERRIDE_LOG
+        $oldFile=$env:VD_LIBRARY_OVERRIDES_FILE;$oldExpected=$env:VD_LIBRARY_TEST_EXPECTED_IDS
         try{
             $env:VD_LIBRARY_TEST_DATA=Join-Path $tests 'data'; New-Item -ItemType Directory -Path $env:VD_LIBRARY_TEST_DATA -Force | Out-Null
-            $env:VD_LIBRARY_TEST_DELAYED='1'; $env:VD_LIBRARY_OVERRIDE_LOG=Join-Path $tests 'delayed-startup.log'
-            & (Join-Path $tests 'RuntimeHookTest.exe') ([IO.Path]::GetFullPath($StreamerPath)) --delayed
-            if($LASTEXITCODE -ne 0){throw 'Delayed Streamer dictionary override test failed.'}
-        }finally{$env:VD_LIBRARY_TEST_DATA=$oldData;$env:VD_LIBRARY_TEST_DELAYED=$oldDelay;$env:VD_LIBRARY_OVERRIDE_LOG=$oldLog}
+            $cases=@(
+                @{Name='re3';Ids='952060';Xml='<VirtualDesktopLibrary version="1"><Game appId="952060"/></VirtualDesktopLibrary>';Delayed=$true},
+                @{Name='gothic-and-re3';Ids='65540,952060';Xml='<VirtualDesktopLibrary version="1"><Game appId="65540"/><Game appId="952060"/></VirtualDesktopLibrary>';Delayed=$true},
+                @{Name='arbitrary-and-builtin';Ids='123456789,271590,6020';Xml='<VirtualDesktopLibrary version="1"><Game appId="123456789"/><Game appId="271590"/><Game appId="6020"/><Game appId="123456789"/></VirtualDesktopLibrary>';Delayed=$true},
+                @{Name='empty';Ids=',';Xml='<VirtualDesktopLibrary version="1"/>';Delayed=$false},
+                @{Name='invalid';Ids=',';Xml='<!DOCTYPE x [<!ENTITY x SYSTEM "file:///not-allowed">]><VirtualDesktopLibrary version="1">&x;</VirtualDesktopLibrary>';Delayed=$false}
+            )
+            foreach($case in $cases){
+                $env:VD_LIBRARY_OVERRIDES_FILE=Join-Path $tests ($case.Name+'.xml')
+                [IO.File]::WriteAllText($env:VD_LIBRARY_OVERRIDES_FILE,$case.Xml)
+                $env:VD_LIBRARY_TEST_EXPECTED_IDS=$case.Ids
+                $env:VD_LIBRARY_TEST_DELAYED=if($case.Delayed){'1'}else{$null}
+                $env:VD_LIBRARY_OVERRIDE_LOG=Join-Path $tests ($case.Name+'.log')
+                if($case.Delayed){& (Join-Path $tests 'RuntimeHookTest.exe') ([IO.Path]::GetFullPath($StreamerPath)) --delayed}
+                else{& (Join-Path $tests 'RuntimeHookTest.exe') ([IO.Path]::GetFullPath($StreamerPath))}
+                if($LASTEXITCODE -ne 0){throw ('Streamer override test failed: '+$case.Name)}
+                if($case.Name -eq 'invalid' -and !(Get-Content -LiteralPath $env:VD_LIBRARY_OVERRIDE_LOG -Raw).Contains('Override failed:')){throw 'Unsafe XML was not rejected.'}
+            }
+        }finally{
+            $env:VD_LIBRARY_TEST_DATA=$oldData;$env:VD_LIBRARY_TEST_DELAYED=$oldDelay;$env:VD_LIBRARY_OVERRIDE_LOG=$oldLog
+            $env:VD_LIBRARY_OVERRIDES_FILE=$oldFile;$env:VD_LIBRARY_TEST_EXPECTED_IDS=$oldExpected
+        }
     }
 }
-foreach($name in @('Steam VR Library.exe','Steam VR Library.dll','Steam VR Library.deps.json','Steam VR Library.runtimeconfig.json')){Copy-Item -LiteralPath (Join-Path $publish $name) -Destination $stage}
+foreach($name in @('Virtual Desktop Unlock.exe','Virtual Desktop Unlock.dll','Virtual Desktop Unlock.deps.json','Virtual Desktop Unlock.runtimeconfig.json')){Copy-Item -LiteralPath (Join-Path $publish $name) -Destination $stage}
 Copy-Item -LiteralPath $hook -Destination $stage -Recurse
 Get-ChildItem -LiteralPath (Join-Path $root 'scripts') -File | Copy-Item -Destination $stage
 foreach($name in @('README.md','LICENSE','CHANGELOG.md')){Copy-Item -LiteralPath (Join-Path $root $name) -Destination $stage}

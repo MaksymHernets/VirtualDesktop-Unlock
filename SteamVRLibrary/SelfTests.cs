@@ -63,12 +63,22 @@ internal static class SelfTests
             var malformed = false;
             try { SteamScanner.Values("\"unclosed"); } catch (InvalidDataException) { malformed = true; }
             Check(malformed, "Malformed Steam manifest fails explicitly");
+            var sharedPath = Path.Combine(root, "Shared", "GameOverrides.xml");
+            var shared = new SharedOverrides(sharedPath);
+            var additions = new LibraryState { Games = [new Game("65540", "Gothic 1 Classic", "unused"), new Game("952060", "Resident Evil 3", "unused", "Imported from Virtual Desktop cache"), new Game("111", "Native VR", "unused", "Imported from Virtual Desktop cache")] };
+            shared.Save(additions);
+            string[] ReadSharedIds(string file) => System.Xml.Linq.XDocument.Load(file).Root!.Elements("Game").Select(x => x.Attribute("appId")!.Value).ToArray();
+            Check(ReadSharedIds(sharedPath).SequenceEqual(["111", "65540", "952060"]), "Exports every selected game regardless of origin or VR metadata");
+            shared.Save(new LibraryState());
+            Check(ReadSharedIds(sharedPath).Length == 0, "Empty custom selection is exported explicitly");
+            Check(ReadSharedIds(sharedPath + ".bak").SequenceEqual(["111", "65540", "952060"]), "Shared override updates retain a backup");
             File.WriteAllText(Path.Combine(steam, "steamapps", "appmanifest_555.acf"), "\"unclosed");
             var partialScan = SteamScanner.Scan(steam, cache);
             Check(partialScan.Games.Count == 2 && partialScan.Warnings.Count == 1, "One corrupt manifest does not prevent other games from loading");
 
             var uiPath = Path.Combine(root, "UI", "library.json");
-            using (var form = new LibraryForm(true, uiPath))
+            var streamer = new TestStreamerControl();
+            using (var form = new LibraryForm(true, uiPath, streamer))
             {
                 form.LoadPreview(scan);
                 form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual;
@@ -76,19 +86,45 @@ internal static class SelfTests
                 IEnumerable<Control> Descendants(Control c) => c.Controls.Cast<Control>().SelectMany(x => new[] { x }.Concat(Descendants(x)));
                 var controls = Descendants(form).ToList();
                 var left = controls.OfType<ListView>().Single(x => x.AccessibleName!.StartsWith("Installed"));
-                var right = controls.OfType<ListView>().Single(x => x.AccessibleName!.StartsWith("My companion"));
+                var right = controls.OfType<ListView>().Single(x => x.AccessibleName == "VD cache games");
                 var addButton = controls.OfType<Button>().Single(x => x.Text.StartsWith("Add to VR"));
                 var removeButton = controls.OfType<Button>().Single(x => x.Text.Contains("Remove"));
                 var undoButton = controls.OfType<Button>().Single(x => x.Text == "Undo move");
                 var search = controls.OfType<TextBox>().Single();
+                var banner = controls.OfType<Label>().Single(x => x.AccessibleName == "Virtual Desktop status");
+                Check(form.Text.StartsWith("Virtual Desktop Unlock") && controls.OfType<Label>().Any(x => x.Text == "VD cache games")
+                    && !controls.Any(x => x.Text.Contains("Steam VR Library")), "Uses the new application and cache panel names without the old label");
+                Check(banner.Text.Contains("Streamer: Running") && banner.Text.Contains("Library: Loaded") && banner.BackColor == Color.FromArgb(22, 48, 49), "Running Streamer and loaded library show green status");
+                streamer.IsRunning = false; form.UpdateConnectionStatus();
+                Check(banner.Text.Contains("Streamer: Not running") && banner.Text.Contains("Library: Loaded") && banner.BackColor == Color.FromArgb(77, 28, 36), "Stopped Streamer with loaded library shows red status");
+                streamer.IsRunning = true; form.UpdateConnectionStatus();
+                var restart = controls.OfType<LinkLabel>().Single(x => x.AccessibleName == "Restart Streamer");
                 Check(left.Items.Count == 1 && right.Items.Count == 1, "UI seeds only installed cached VR games");
                 left.Items[0].Selected = true; addButton.PerformClick();
                 Check(left.Items.Count == 0 && right.Items.Count == 2 && new LibraryStore(uiPath).Load()!.Games.Count == 2, "Add button moves RE3 and persists the selection");
+                var uiShared = Path.Combine(Path.GetDirectoryName(uiPath)!, "GameOverrides.xml");
+                Check(ReadSharedIds(uiShared).SequenceEqual(["111", "952060"]), "Add button syncs custom game IDs for the startup helper");
+                Check(restart.Visible && restart.Enabled, "Unapplied selection shows a clickable restart message");
+                using (var image = new Bitmap(form.Width, form.Height))
+                {
+                    form.DrawToBitmap(image, new Rectangle(Point.Empty, form.Size));
+                    image.Save(Path.Combine(root, "updated-ui.png"));
+                }
+                streamer.Fail = true;
+                form.RestartStreamerAsync().GetAwaiter().GetResult();
+                Check(restart.Visible && restart.Enabled && streamer.Restarts == 1, "Failed restart preserves the message and allows retry");
+                streamer.Fail = false;
+                form.RestartStreamerAsync().GetAwaiter().GetResult();
+                Check(!restart.Visible && streamer.Restarts == 2, "Confirmed restart hides the message");
                 right.Items.Cast<ListViewItem>().Single(x => ((Game)x.Tag!).Id == "952060").Selected = true;
                 removeButton.PerformClick();
                 Check(left.Items.Count == 1 && right.Items.Count == 1 && new LibraryStore(uiPath).Load()!.Games.Count == 1, "Remove button moves RE3 back and saves");
+                Check(ReadSharedIds(uiShared).SequenceEqual(["111"]), "Remove button removes the custom helper override");
+                Check(restart.Visible, "Removal also requires a Streamer restart");
                 undoButton.PerformClick();
                 Check(right.Items.Count == 2 && new LibraryStore(uiPath).Load()!.Games.Count == 2, "Undo restores and saves the prior selection");
+                Check(ReadSharedIds(uiShared).SequenceEqual(["111", "952060"]), "Undo also restores the helper override");
+                Check(!restart.Visible, "Undo back to the live selection clears the restart message");
                 search.Text = "952060";
                 Check(right.Items.Count == 1 && ((Game)right.Items[0].Tag!).Id == "952060", "Search filters by Steam ID");
                 search.Clear();
@@ -111,6 +147,39 @@ internal static class SelfTests
                         "Second-instance activation reaches the existing UI and receives acknowledgement");
                 }
             }
+            using (var unloaded = new LibraryForm(true, Path.Combine(root, "Unloaded", "library.json"), streamer))
+            {
+                var banner = unloaded.Controls[0].Controls.OfType<Label>().Single(x => x.AccessibleName == "Virtual Desktop status");
+                streamer.IsRunning = false; unloaded.UpdateConnectionStatus();
+                Check(banner.Text.Contains("Streamer: Not running") && banner.Text.Contains("Library: Not loaded") && banner.BackColor == Color.FromArgb(83, 52, 18), "Stopped Streamer and unloaded library show orange status");
+                streamer.IsRunning = true; unloaded.UpdateConnectionStatus();
+                Check(banner.Text.Contains("Streamer: Running") && banner.Text.Contains("Library: Not loaded") && banner.BackColor == Color.FromArgb(83, 52, 18), "Running Streamer while library is not loaded shows orange status");
+            }
+            File.WriteAllLines(Path.Combine(root, "results.txt"), checks);
+            var startup = new TestStartupRegistration();
+            using (var settings = new SettingsForm(startup, showErrors: false))
+            {
+                settings.ShowInTaskbar = false; settings.StartPosition = FormStartPosition.Manual;
+                settings.Location = new Point(-20000, -20000); settings.Show(); Application.DoEvents();
+                var settingsControls = settings.Controls[0].Controls.Cast<Control>().ToArray();
+                var autoStart = settingsControls.OfType<CheckBox>().Single(c => c.AccessibleName == "Launch at Windows startup");
+                Check(!autoStart.Checked && startup.Writes == 0, "Opening settings leaves Windows startup unchanged");
+                Check(!settingsControls.OfType<ComboBox>().Single().Enabled && !settingsControls.OfType<CheckBox>().Single(c => c.AccessibleName == "Remove streaming bitrate limits").Enabled, "Future language and bitrate options are disabled");
+                autoStart.Checked = true;
+                Check(startup.Enabled && startup.Writes == 1, "Startup checkbox enables automatic launch");
+                startup.Fail = true; autoStart.Checked = false;
+                Check(autoStart.Checked && startup.Enabled, "Failed startup write restores the checkbox state");
+                startup.Fail = false; autoStart.Checked = false;
+                Check(!startup.Enabled, "Startup checkbox disables automatic launch");
+                autoStart.Checked = true;
+                using var image = new Bitmap(settings.Width, settings.Height);
+                settings.DrawToBitmap(image, new Rectangle(Point.Empty, settings.Size));
+                image.Save(Path.Combine(root, "settings-ui.png"));
+            }
+            using (var settings = new SettingsForm(startup, showErrors: false))
+            {
+                Check(settings.Controls[0].Controls.OfType<CheckBox>().Single(c => c.AccessibleName == "Launch at Windows startup").Checked, "Reopened settings reflect persisted startup preference");
+            }
             File.WriteAllLines(Path.Combine(root, "results.txt"), checks);
             File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "self-test-result.txt"), string.Join(Environment.NewLine, checks));
             return 0;
@@ -121,6 +190,36 @@ internal static class SelfTests
             File.WriteAllLines(Path.Combine(root, "results.txt"), checks);
             File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "self-test-result.txt"), string.Join(Environment.NewLine, checks));
             return 1;
+        }
+    }
+
+    private sealed class TestStreamerControl : IStreamerControl
+    {
+        private HashSet<uint> applied = [111];
+        private uint[] requested = [];
+        public bool Fail { get; set; }
+        public bool IsRunning { get; set; } = true;
+        public int Restarts { get; private set; }
+        public bool IsApplied(IReadOnlyCollection<uint> ids)
+        { requested = ids.ToArray(); return applied.SetEquals(ids); }
+        public Task RestartAsync()
+        {
+            Restarts++;
+            if (Fail) return Task.FromException(new IOException("Simulated restart failure"));
+            applied = requested.ToHashSet();
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class TestStartupRegistration : IStartupRegistration
+    {
+        public bool Enabled { get; private set; }
+        public bool Fail { get; set; }
+        public int Writes { get; private set; }
+        public void SetEnabled(bool enabled)
+        {
+            if (Fail) throw new IOException("Simulated registry failure");
+            Enabled = enabled; Writes++;
         }
     }
 }

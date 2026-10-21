@@ -4,10 +4,12 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Collections.Generic;
+using System.Xml;
 
-[assembly: AssemblyVersion("0.1.0.0")]
-[assembly: AssemblyTitle("Virtual Desktop RE3 Library Override")]
-[assembly: AssemblyFileVersion("0.1.0.0")]
+[assembly: AssemblyVersion("0.1.1.0")]
+[assembly: AssemblyTitle("Virtual Desktop Library Overrides")]
+[assembly: AssemblyFileVersion("0.1.1.0")]
 
 namespace VirtualDesktop.LibraryOverrides
 {
@@ -78,8 +80,11 @@ namespace VirtualDesktop.LibraryOverrides
                     if (arguments[0] != typeof(uint) || !arguments[1].IsEnum) continue;
                     IDictionary overrides = (IDictionary)field.GetValue(null);
                     int originalCount = overrides.Count;
-                    overrides[(uint)952060] = Enum.ToObject(arguments[1], 3);
-                    Log("Installed RE3 OpenXR override; entries=" + originalCount + " -> " + overrides.Count + "; executable=" + assembly.Location);
+                    uint[] ids = ReadOverrides();
+                    // Explicit selections must also bypass built-in mod-file checks.
+                    // Unselected built-in exceptions retain their original behavior.
+                    foreach (uint id in ids) overrides[id] = Enum.ToObject(arguments[1], 3);
+                    Log("Installed OpenXR overrides: " + String.Join(",", ids) + "; entries=" + originalCount + " -> " + overrides.Count + "; executable=" + assembly.Location);
                     return;
                 }
                 throw new MissingFieldException("GameManager mod override dictionary was not found.");
@@ -89,6 +94,31 @@ namespace VirtualDesktop.LibraryOverrides
                 // Fail open for normal Streamer startup; the original program remains usable.
                 Log("Override failed: " + e);
             }
+        }
+
+        private static uint[] ReadOverrides()
+        {
+            string path = Environment.GetEnvironmentVariable("VD_LIBRARY_OVERRIDES_FILE");
+            if (String.IsNullOrEmpty(path)) path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virtual Desktop Unlock", "GameOverrides.xml");
+            // Preserve the working RE3 behavior until the updated app creates the shared selection.
+            if (!File.Exists(path)) return new uint[] { 952060 };
+            if (new FileInfo(path).Length > 131072) throw new InvalidDataException("Override file is too large.");
+            var ids = new SortedSet<uint>();
+            var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 131072 };
+            using (var reader = XmlReader.Create(path, settings))
+            {
+                reader.MoveToContent();
+                if (reader.Name != "VirtualDesktopLibrary" || reader.GetAttribute("version") != "1") throw new InvalidDataException("Unsupported override file format.");
+                while (reader.Read())
+                {
+                    if (reader.NodeType != XmlNodeType.Element) continue;
+                    uint id;
+                    if (reader.Name != "Game" || !UInt32.TryParse(reader.GetAttribute("appId"), out id) || id == 0) throw new InvalidDataException("Invalid Steam app ID in override file.");
+                    ids.Add(id);
+                    if (ids.Count > 1000) throw new InvalidDataException("Too many game overrides.");
+                }
+            }
+            var result = new uint[ids.Count]; ids.CopyTo(result); return result;
         }
 
         private static void Log(string text)
