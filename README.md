@@ -4,7 +4,7 @@
 
 **v0.1.0** · Windows x64 · Unofficial · MIT
 
-Add **Resident Evil 3 Remake** to Virtual Desktop's actual headset Games tab using an optional runtime helper. A separate desktop companion app lets you organize installed Steam games into a personal VR library.
+Virtual Desktop's actual headset Games tab using an optional runtime helper. A separate desktop companion app lets you organize installed Steam games into a personal VR library. An unofficial program that allows you to unlock certain features in Virtual Desktop Streaming—for example, adding third-party VR games or mods to the streamer's game panel, as well as increasing the bitrate limits for video streaming.
 
 ## Two distinct features
 
