@@ -88,7 +88,7 @@ internal static class SelfTests
                 var left = controls.OfType<ListView>().Single(x => x.AccessibleName!.StartsWith("Installed"));
                 var right = controls.OfType<ListView>().Single(x => x.AccessibleName == "VD cache games");
                 var addButton = controls.OfType<Button>().Single(x => x.Text.StartsWith("Add to VR"));
-                var removeButton = controls.OfType<Button>().Single(x => x.Text.Contains("Remove"));
+                var removeButton = controls.OfType<Button>().Single(x => x.Text == "←  Remove");
                 var undoButton = controls.OfType<Button>().Single(x => x.Text == "Undo move");
                 var search = controls.OfType<TextBox>().Single();
                 var banner = controls.OfType<Label>().Single(x => x.AccessibleName == "Virtual Desktop status");
@@ -102,6 +102,12 @@ internal static class SelfTests
                 Check(form.CurrentIconState == ConnectionIcon.Stopped && !ReferenceEquals(readyIcon, form.Icon), "Stopping Streamer switches the window and tray icon state to red");
                 streamer.IsRunning = true; form.UpdateConnectionStatus();
                 Check(form.CurrentIconState == ConnectionIcon.Ready && ReferenceEquals(readyIcon, form.Icon), "Restarting Streamer restores the ready icon");
+                var bitrateButton = controls.OfType<Button>().Single(x => x.AccessibleName == "Toggle bitrate limits");
+                var bitratePath = Path.Combine(Path.GetDirectoryName(uiPath)!, "BitrateOverrides.xml");
+                bitrateButton.PerformClick();
+                Check(VirtualDesktop.Unlock.BitrateConfiguration.Read(bitratePath).Enabled && bitrateButton.Text == "Restore bitrate limits", "Main bitrate button persists enable and offers stock restoration");
+                bitrateButton.PerformClick();
+                Check(!VirtualDesktop.Unlock.BitrateConfiguration.Read(bitratePath).Enabled && bitrateButton.Text == "Remove bitrate limits", "Main bitrate button restores stock limits persistently");
                 var restart = controls.OfType<LinkLabel>().Single(x => x.AccessibleName == "Restart Streamer");
                 Check(left.Items.Count == 1 && right.Items.Count == 1, "UI seeds only installed cached VR games");
                 left.Items[0].Selected = true; addButton.PerformClick();
@@ -165,10 +171,27 @@ internal static class SelfTests
             }
             File.WriteAllLines(Path.Combine(root, "results.txt"), checks);
             var startup = new TestStartupRegistration();
+            var bitratePreferences = new BitratePreferences(Path.Combine(root, "Bitrates", "BitrateOverrides.xml"));
+            using (var profiles = new BitrateProfilesForm(bitratePreferences))
+            {
+                profiles.ShowInTaskbar = false; profiles.StartPosition = FormStartPosition.Manual; profiles.Location = new Point(-20000, -20000); profiles.Show(); Application.DoEvents();
+                var fields = profiles.Controls[0].Controls.Cast<Control>().ToArray();
+                var headset = fields.OfType<ComboBox>().Single();
+                var values = fields.OfType<NumericUpDown>().ToDictionary(x => x.AccessibleName!);
+                Check((int)headset.SelectedValue! == 1000 && values["H.264 / H.264+"].Value == 1000 && values["H.265 / HEVC 10-bit"].Value == 300 && values["AV1 / AV1 10-bit"].Value == 250, $"Profiles window loads the requested Quest 3 ceilings (headset={headset.SelectedValue}, AV1={values["AV1 / AV1 10-bit"].Value})");
+                values["AV1 / AV1 10-bit"].Value = 260;
+                headset.SelectedValue = 1001;
+                fields.OfType<CheckBox>().Single().Checked = true;
+                values["H.264 / H.264+"].Value = 800; values["H.265 / HEVC 10-bit"].Value = 275; values["AV1 / AV1 10-bit"].Value = 240;
+                using (var image = new Bitmap(profiles.Width, profiles.Height)) { profiles.DrawToBitmap(image, new Rectangle(Point.Empty, profiles.Size)); image.Save(Path.Combine(root, "bitrate-profiles-ui.png")); }
+                fields.OfType<Button>().Single(x => x.AccessibleName == "Save bitrate profiles").PerformClick();
+                var saved = VirtualDesktop.Unlock.BitrateConfiguration.Read(bitratePreferences.Path);
+                Check(saved.Profiles[1000].Av1Mbps == 260 && saved.Profiles[1001].Av1Mbps == 240 && saved.Profiles[1001].HevcMbps == 275 && !saved.Enabled, "Headset/codec edits persist separately without enabling the feature implicitly");
+            }
             var trayPath = Path.Combine(root, "Preferences", "Settings.json");
             var traySettings = new TraySettings(trayPath);
             Check(traySettings.Enabled && !File.Exists(trayPath), "System tray is enabled by default without overwriting settings");
-            using (var settings = new SettingsForm(startup, showErrors: false, traySettings: traySettings))
+            using (var settings = new SettingsForm(startup, showErrors: false, traySettings: traySettings, bitratePreferences: bitratePreferences))
             {
                 settings.ShowInTaskbar = false; settings.StartPosition = FormStartPosition.Manual;
                 settings.Location = new Point(-20000, -20000); settings.Show(); Application.DoEvents();
@@ -181,7 +204,12 @@ internal static class SelfTests
                 tray.Checked = true;
                 Check(new TraySettings(trayPath).Enabled, "Re-enabling the system tray persists across settings reload");
                 Check(!autoStart.Checked && startup.Writes == 0, "Opening settings leaves Windows startup unchanged");
-                Check(!settingsControls.OfType<ComboBox>().Single().Enabled && !settingsControls.OfType<CheckBox>().Single(c => c.AccessibleName == "Remove streaming bitrate limits").Enabled, "Future language and bitrate options are disabled");
+                Check(!settingsControls.OfType<ComboBox>().Single().Enabled, "Future language option remains disabled");
+                var bitrateSetting = settingsControls.OfType<CheckBox>().Single(c => c.AccessibleName == "Remove streaming bitrate limits");
+                Check(bitrateSetting.Enabled, "Bitrate setting is functional rather than a future placeholder");
+                bitrateSetting.Checked = true;
+                Check(VirtualDesktop.Unlock.BitrateConfiguration.Read(bitratePreferences.Path).Enabled, "Settings checkbox saves the same bitrate configuration");
+                bitrateSetting.Checked = false;
                 autoStart.Checked = true;
                 Check(startup.Enabled && startup.Writes == 1, "Startup checkbox enables automatic launch");
                 startup.Fail = true; autoStart.Checked = false;

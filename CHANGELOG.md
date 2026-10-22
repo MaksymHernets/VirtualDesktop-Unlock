@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.4 — 2026-10-22
+
+- Add main-screen Remove/Restore bitrate limits controls and a functional Settings checkbox.
+- Place the bitrate toggle and profile buttons in the top row beside Refresh.
+- Add independent headset/codec profiles with the Quest 3 preset: H.264/H.264+ 1000, HEVC/HEVC10 300, AV1/AV110 250 Mbps.
+- Extend the x64 startup helper with a verified in-memory bitrate-ceiling redirect, live configuration updates, acknowledgement, and stock fallback on disable or invalid configuration.
+- Preserve bitrate slider scaling, automatic network limiting, unconfigured headset limits and original per-view allocation.
+- Add isolated server tests for real Streamer calculations and encoder-wrapper forwarding; client-side stream validation remains pending.
+- Refresh existing encoder wrappers through the original Streamer forwarding routine when profiles change.
+- Add read-only live diagnostics for calculation inputs, encoder targets and NVENC average/maximum bitrate. A 222 Mbps AV1 budget reached native configuration, but actual video traffic above 200 Mbps remains unverified and the headset overlay still showed 200.
+
 ## 0.1.3 — 2026-10-22
 
 - Add red (Streamer stopped) and orange (library not loaded) lock variants; switch window and tray icons automatically and show status in the tray tooltip.

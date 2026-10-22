@@ -2,7 +2,7 @@
 param([string]$StreamerPath,[switch]$SkipTests)
 $ErrorActionPreference='Stop'
 $root=$PSScriptRoot
-$version='0.1.3'
+$version='0.1.4'
 $env:DOTNET_CLI_HOME=Join-Path $root '.dotnet-build'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT='1'
 $env:DOTNET_GENERATE_ASPNET_CERTIFICATE='false'
@@ -18,7 +18,7 @@ if($LASTEXITCODE -ne 0){throw 'Companion app build failed.'}
 $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $framework=Split-Path -Parent $compiler
 $references=@("/reference:$framework\WPF\PresentationFramework.dll","/reference:$framework\WPF\WindowsBase.dll",'/reference:System.Xaml.dll')
-& $compiler /nologo /target:library ('/out:'+(Join-Path $hook 'VirtualDesktop.LibraryOverrides.dll')) $references (Join-Path $root 'src\RuntimeOverrides\LibraryOverrides.cs')
+& $compiler /nologo /target:library ('/out:'+(Join-Path $hook 'VirtualDesktop.LibraryOverrides.dll')) $references (Join-Path $root 'src\RuntimeOverrides\LibraryOverrides.cs') (Join-Path $root 'src\RuntimeOverrides\BitrateRuntime.cs') (Join-Path $root 'Shared\BitrateConfiguration.cs')
 if($LASTEXITCODE -ne 0){throw 'Runtime helper build failed.'}
 Copy-Item -LiteralPath (Join-Path $root 'src\RuntimeOverrides\RuntimeHook.config') -Destination (Join-Path $hook 'VirtualDesktop.Streamer.exe.config')
 [pscustomobject]@{Version=$version;StreamerVersion='1.34.23.0';StreamerSHA256='FEAD548C57DF539006E6C97A7A29D46FDE172F756F40D65DBDB77ABAAFA3AEAD';HelperSHA256=(Get-FileHash -LiteralPath (Join-Path $hook 'VirtualDesktop.LibraryOverrides.dll')).Hash;ConfigSHA256=(Get-FileHash -LiteralPath (Join-Path $hook 'VirtualDesktop.Streamer.exe.config')).Hash} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $hook 'manifest.json')
@@ -56,6 +56,16 @@ if(!$SkipTests){
                 if($LASTEXITCODE -ne 0){throw ('Streamer override test failed: '+$case.Name)}
                 if($case.Name -eq 'invalid' -and !(Get-Content -LiteralPath $env:VD_LIBRARY_OVERRIDE_LOG -Raw).Contains('Override failed:')){throw 'Unsafe XML was not rejected.'}
             }
+            & $compiler /nologo /target:exe ('/out:'+(Join-Path $tests 'BitrateHookTest.exe')) ('/reference:'+(Join-Path $hook 'VirtualDesktop.LibraryOverrides.dll')) (Join-Path $root 'src\RuntimeOverrides\BitrateHookTest.cs')
+            if($LASTEXITCODE -ne 0){throw 'Bitrate server test harness build failed.'}
+            Copy-Item -LiteralPath (Join-Path $hook 'VirtualDesktop.Streamer.exe.config') -Destination (Join-Path $tests 'BitrateHookTest.exe.config')
+            $savedBitrateTest=$env:VD_BITRATE_TEST; $savedBitrateConfig=$env:VD_BITRATE_CONFIG; $savedBitrateStatus=$env:VD_BITRATE_STATUS
+            try{
+                $env:VD_BITRATE_TEST='1'; $env:VD_BITRATE_CONFIG=Join-Path $tests 'BitrateOverrides.xml'; $env:VD_BITRATE_STATUS=Join-Path $tests 'BitrateStatus.xml'
+                $env:VD_LIBRARY_OVERRIDES_FILE=Join-Path $tests 're3.xml'; $env:VD_LIBRARY_OVERRIDE_LOG=Join-Path $tests 'bitrate-hook.log'
+                & (Join-Path $tests 'BitrateHookTest.exe') ([IO.Path]::GetFullPath($StreamerPath))
+                if($LASTEXITCODE -ne 0){throw 'Bitrate server tests failed.'}
+            }finally{$env:VD_BITRATE_TEST=$savedBitrateTest;$env:VD_BITRATE_CONFIG=$savedBitrateConfig;$env:VD_BITRATE_STATUS=$savedBitrateStatus}
         }finally{
             $env:VD_LIBRARY_TEST_DATA=$oldData;$env:VD_LIBRARY_TEST_DELAYED=$oldDelay;$env:VD_LIBRARY_OVERRIDE_LOG=$oldLog
             $env:VD_LIBRARY_OVERRIDES_FILE=$oldFile;$env:VD_LIBRARY_TEST_EXPECTED_IDS=$oldExpected

@@ -49,7 +49,7 @@ public sealed class WindowsStartupRegistration : IStartupRegistration
 
 public sealed class SettingsForm : Form
 {
-    public SettingsForm(IStartupRegistration startup, bool showErrors = true, TraySettings? traySettings = null)
+    public SettingsForm(IStartupRegistration startup, bool showErrors = true, TraySettings? traySettings = null, BitratePreferences? bitratePreferences = null)
     {
         Text = "Settings — Virtual Desktop Unlock";
         BackColor = Color.FromArgb(14, 20, 31);
@@ -101,7 +101,19 @@ public sealed class SettingsForm : Form
             }
         };
         root.Controls.Add(tray, 0, 4);
-        root.Controls.Add(new FutureOptionCheckBox { Text = "Remove streaming bitrate limits · Coming later", Enabled = false, AutoSize = true, Anchor = AnchorStyles.Left, AccessibleName = "Remove streaming bitrate limits" }, 0, 5);
+        var bitrate = new CheckBox { Text = "Enable higher bitrate limits", Enabled = bitratePreferences != null, Checked = bitratePreferences?.Configuration.Enabled ?? false, AutoSize = true, Anchor = AnchorStyles.Left, AccessibleName = "Remove streaming bitrate limits" };
+        bool updatingBitrate = false;
+        bitrate.CheckedChanged += (_, _) =>
+        {
+            if (updatingBitrate || bitratePreferences == null) return;
+            try { var next = bitratePreferences.Configuration.Copy(); next.Enabled = bitrate.Checked; bitratePreferences.Save(next); }
+            catch (Exception e)
+            {
+                updatingBitrate = true; bitrate.Checked = !bitrate.Checked; updatingBitrate = false;
+                if (showErrors) MessageBox.Show(this, e.Message, "Could not save bitrate setting", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        };
+        root.Controls.Add(bitrate, 0, 5);
         var close = new Button { Text = "Done", DialogResult = DialogResult.OK, Size = new Size(100, 34), Anchor = AnchorStyles.Right, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(108, 218, 188), ForeColor = BackColor };
         root.Controls.Add(close, 0, 6);
         AcceptButton = CancelButton = close;

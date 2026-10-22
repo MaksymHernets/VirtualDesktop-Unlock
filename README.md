@@ -2,9 +2,9 @@
 
 # Virtual Desktop Unlock
 
-**v0.1.3** · Windows x64 · Unofficial · MIT
+**v0.1.4** · Windows x64 · Unofficial · MIT
 
-An unofficial program for extending Virtual Desktop Streaming. Add custom Steam games, including games that use third-party VR mods, to Virtual Desktop's actual headset Games tab using the optional runtime helper. The desktop companion app organizes your installed Steam games and saves selections for the helper. Increasing video streaming bitrate limits is planned for a future update; the current Settings option is disabled.
+An unofficial program for extending Virtual Desktop Streaming. Add custom Steam games, including games that use third-party VR mods, to Virtual Desktop's actual headset Games tab using the optional runtime helper. The desktop companion app organizes your installed Steam games, saves selections for the helper, and provides optional headset-specific bitrate ceilings.
 
 ## Two distinct features
 
@@ -19,7 +19,25 @@ When the saved selection differs from the running helper's confirmed selection, 
 
 ## Download and run
 
-Use the gear beside **Virtual Desktop Unlock** to open Settings. **Launch automatically when Windows starts** saves immediately for the current Windows user. Keep the app in its current folder, or disable and enable this option after moving it. Language selection and streaming bitrate-limit removal are disabled placeholders for future updates.
+Use the gear beside **Virtual Desktop Unlock** to open Settings. **Launch automatically when Windows starts** saves immediately for the current Windows user. Keep the app in its current folder, or disable and enable this option after moving it. Language selection remains a disabled placeholder.
+
+## Higher bitrate limits
+
+With helper **0.1.4** installed, click **Remove bitrate limits** on the main screen to enable the configured ceilings. **Restore bitrate limits** returns to stock behavior. The Settings checkbox controls the same option. Changes are read live by the helper; the app reports pending changes until Streamer acknowledges them. Use the restart link if a helper upgrade or restart is required.
+
+The Quest 3 preset is **H.264/H.264+ 1000 Mbps**, **H.265/HEVC 10-bit 300 Mbps**, and **AV1/AV1 10-bit 250 Mbps**. **Bitrate profiles** lets you set each headset's three codec-family ceilings independently. Other headsets retain their original limits until a custom profile is enabled for them. Profiles are stored in `%APPDATA%\Virtual Desktop Unlock\BitrateOverrides.xml`.
+
+Custom profiles only raise stock ceilings; a lower entered value leaves the original ceiling in place. They do not add codec support to headsets that lack it.
+
+These are maximum targets, not a fixed traffic rate: Streamer's bitrate slider, measured network capacity, view splitting and spacewarp behavior still apply. Set the client bitrate slider to its maximum to test the configured ceiling; the client slider may still display its original limit. Client-side decoding, stability and actual transmitted throughput remain to be verified in the headset.
+
+**Experimental: the first headset test still reported 200 Mbps in the performance overlay. Higher actual stream bitrate is not yet confirmed.** The helper's configuration acknowledgement only confirms that the profile was loaded. Changed live calculation inputs and targets are logged as `Bitrate live settings` in `%PROGRAMDATA%\Virtual Desktop\LibraryOverrides.log` to help diagnose the remaining limit.
+
+Later live diagnostics confirmed a custom 222 Mbps AV1 budget reached NVENC as 111 Mbps average and maximum per view. The overlay still showed 200, while sampled total Ethernet traffic was only 84–93 Mbps. The overlay therefore cannot by itself validate this server override. Native configuration is confirmed; actual video traffic above 200 Mbps remains unverified. These diagnostics also report NVENC's average and maximum separately without changing them.
+
+Server-side synthetic NVENC checks accepted AV1 at 250 Mbps, HEVC at 300 Mbps, and H.264 at 500 Mbps per view. A single H.264 stream at 1000 Mbps was rejected with an invalid-level error. For initial testing of the 1000 Mbps H.264 budget, disable spacewarp so Streamer uses its original 500 Mbps per-view allocation; the 1000 Mbps single-stream case is not validated.
+
+The x64 helper verifies the supported Streamer binary and installs an in-memory redirect of its bitrate-ceiling calculation at startup. Runtime profile changes swap configuration data; disabling returns the original captured ceiling for every unconfigured/disabled combination. It does not modify the signed Streamer file, the headset application, or Windows security settings. Server tests exercise the original bitrate calculation and forwarding into encoder wrappers; they do not encode a real video stream.
 
 **Show in system tray** is enabled by default. Closing the window keeps the app running in the tray. Double-click the icon or choose **Open** to restore the window; the tray menu also includes **Settings** and **Exit**. Disabling this setting removes the icon and restores normal close-to-exit behavior. The preference is saved in `%APPDATA%\Virtual Desktop Unlock\Settings.json`.
 

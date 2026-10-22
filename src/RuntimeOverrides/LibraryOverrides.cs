@@ -7,9 +7,9 @@ using System.Threading;
 using System.Collections.Generic;
 using System.Xml;
 
-[assembly: AssemblyVersion("0.1.1.0")]
+[assembly: AssemblyVersion("0.1.4.0")]
 [assembly: AssemblyTitle("Virtual Desktop Library Overrides")]
-[assembly: AssemblyFileVersion("0.1.1.0")]
+[assembly: AssemblyFileVersion("0.1.4.0")]
 
 namespace VirtualDesktop.LibraryOverrides
 {
@@ -85,6 +85,11 @@ namespace VirtualDesktop.LibraryOverrides
                     // Unselected built-in exceptions retain their original behavior.
                     foreach (uint id in ids) overrides[id] = Enum.ToObject(arguments[1], 3);
                     Log("Installed OpenXR overrides: " + String.Join(",", ids) + "; entries=" + originalCount + " -> " + overrides.Count + "; executable=" + assembly.Location);
+                    if (String.IsNullOrEmpty(testDirectory) || Environment.GetEnvironmentVariable("VD_BITRATE_TEST") == "1")
+                    {
+                        try { BitrateRuntime.Install(assembly,Log); }
+                        catch (Exception e) { Log("Bitrate hook unavailable; original bitrate behavior retained: "+e); }
+                    }
                     return;
                 }
                 throw new MissingFieldException("GameManager mod override dictionary was not found.");

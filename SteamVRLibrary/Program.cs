@@ -70,6 +70,10 @@ public sealed class LibraryForm : Form
     private static readonly Color Accent = Color.FromArgb(108, 218, 188);
     private readonly bool preview;
     private readonly TraySettings traySettings;
+    private readonly BitratePreferences bitratePreferences;
+    private readonly Button bitrate = MakeButton("Remove bitrate limits", primary: true);
+    private readonly Button bitrateProfiles = MakeButton("Bitrate profiles…");
+    private readonly Label bitrateStatus = TextLabel("Stock bitrate limits", Muted, 9);
     private readonly NotifyIcon trayIcon = new();
     private readonly StatusIcons statusIcons = new();
     internal ConnectionIcon CurrentIconState { get; private set; } = ConnectionIcon.Unloaded;
@@ -109,9 +113,12 @@ public sealed class LibraryForm : Form
         store = new LibraryStore(libraryPath ?? Path.Combine(AppContext.BaseDirectory, "Data", "library.json"));
         this.traySettings = traySettings ?? new TraySettings(preview || libraryPath != null
             ? Path.Combine(Path.GetDirectoryName(store.Path)!, "Settings.json") : TraySettings.DefaultPath);
+        bitratePreferences = new BitratePreferences(preview || libraryPath != null
+            ? Path.Combine(Path.GetDirectoryName(store.Path)!, "BitrateOverrides.xml") : VirtualDesktop.Unlock.BitrateConfiguration.DefaultPath);
+        bitratePreferences.Changed += BitrateChanged;
         sharedOverrides = new SharedOverrides(preview || libraryPath != null
             ? Path.Combine(Path.GetDirectoryName(store.Path)!, "GameOverrides.xml") : SharedOverrides.DefaultPath);
-        Text = "Virtual Desktop Unlock — v0.1.3";
+        Text = "Virtual Desktop Unlock — v0.1.4";
         Icon = statusIcons[ConnectionIcon.Unloaded];
         trayIcon.Icon = Icon;
         trayIcon.Text = "Virtual Desktop Unlock";
@@ -126,22 +133,25 @@ public sealed class LibraryForm : Form
         BackColor = Background;
         ForeColor = Color.White;
         Font = new Font("Segoe UI", 10);
-        ClientSize = new Size(1160, 730);
-        MinimumSize = new Size(990, 640);
+        ClientSize = new Size(1160, 754);
+        MinimumSize = new Size(990, 664);
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28, 22, 28, 18), ColumnCount = 1, RowCount = 8, BackColor = Background };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28, 22, 28, 18), ColumnCount = 1, RowCount = 9, BackColor = Background };
         foreach (var height in new[] { 50, 30, 54, 48 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
         Controls.Add(root);
 
-        var titleRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        var titleRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4 };
         titleRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 193));
+        titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 146));
         titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         var title = TextLabel("Virtual Desktop Unlock", Color.White, 24, FontStyle.Bold);
         title.AutoSize = true;
@@ -158,9 +168,12 @@ public sealed class LibraryForm : Form
         settings.Click += (_, _) => OpenSettings();
         heading.Controls.Add(settings);
         titleRow.Controls.Add(heading, 0, 0);
-        refresh.Dock = DockStyle.Fill;
-        refresh.Margin = new Padding(0, 3, 0, 8);
-        titleRow.Controls.Add(refresh, 1, 0);
+        bitrate.Dock = bitrateProfiles.Dock = refresh.Dock = DockStyle.Fill;
+        bitrate.Margin = bitrateProfiles.Margin = new Padding(8, 3, 0, 8);
+        refresh.Margin = new Padding(8, 3, 0, 8);
+        titleRow.Controls.Add(bitrate, 1, 0);
+        titleRow.Controls.Add(bitrateProfiles, 2, 0);
+        titleRow.Controls.Add(refresh, 3, 0);
         root.Controls.Add(titleRow, 0, 0);
         root.Controls.Add(TextLabel("Choose the games you want to play in VR.", Muted, 11), 0, 1);
 
@@ -203,10 +216,19 @@ public sealed class LibraryForm : Form
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 12, 0, 0), WrapContents = false, Margin = Padding.Empty };
         launch.Width = 154; undo.Width = 116; details.Width = 110;
         actions.Controls.AddRange([launch, undo, details]);
+        bitrate.AccessibleName = "Toggle bitrate limits";
+        bitrate.Click += (_, _) =>
+        {
+            try { bitratePreferences.Toggle(); }
+            catch (Exception e) { MessageBox.Show(this, e.Message, "Could not change bitrate limits", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        };
+        bitrateProfiles.Click += (_, _) => { using var dialog = new BitrateProfilesForm(bitratePreferences); dialog.Icon = Icon; dialog.ShowDialog(this); };
+        tip.SetToolTip(bitrate, "Enable or restore headset-specific codec ceilings. Quest 3 preset: H.264 1000, H.265 300, AV1 250 Mbps. Requires the 0.1.4 helper.");
         root.Controls.Add(actions, 0, 5);
         status.AutoEllipsis = true;
         root.Controls.Add(status, 0, 6);
         root.Controls.Add(restart, 0, 7);
+        root.Controls.Add(bitrateStatus, 0, 8);
         tip.SetToolTip(restart, "Close and relaunch Virtual Desktop Streamer. Windows may request administrator permission. Then reconnect your headset.");
         restart.LinkClicked += async (_, _) => await RestartStreamerAsync();
         restartTimer.Tick += (_, _) => UpdateRestartNotice();
@@ -348,6 +370,7 @@ public sealed class LibraryForm : Form
     {
         UpdateRestartNotice();
         restart.Enabled = ready && !busy;
+        bitrate.Enabled = bitrateProfiles.Enabled = !busy;
         add.Enabled = ready && !busy && steam.SelectedItems.Count > 0;
         remove.Enabled = ready && !busy && vr.SelectedItems.Count > 0;
         launch.Enabled = ready && !busy && steam.SelectedItems.Count + vr.SelectedItems.Count == 1;
@@ -399,7 +422,9 @@ public sealed class LibraryForm : Form
     private void UpdateRestartNotice()
     {
         UpdateConnectionStatus();
-        if (!busy) restart.Visible = syncedIds != null && !streamerControl.IsApplied(syncedIds);
+        bitrate.Text = bitratePreferences.Configuration.Enabled ? "Restore bitrate limits" : "Remove bitrate limits";
+        bitrateStatus.Text = bitratePreferences.StatusText;
+        if (!busy) restart.Visible = (syncedIds != null && !streamerControl.IsApplied(syncedIds)) || bitratePreferences.RequiresRestart;
     }
 
     internal void UpdateConnectionStatus()
@@ -428,8 +453,8 @@ public sealed class LibraryForm : Form
         {
             await streamerControl.RestartAsync();
             var deadline = DateTime.UtcNow.AddSeconds(10);
-            while (!streamerControl.IsApplied(syncedIds) && DateTime.UtcNow < deadline) await Task.Delay(250);
-            if (!streamerControl.IsApplied(syncedIds)) throw new IOException("Streamer restarted, but the helper has not confirmed your selection. Try again or check the integration installation.");
+            while ((!streamerControl.IsApplied(syncedIds) || bitratePreferences.RequiresRestart) && DateTime.UtcNow < deadline) await Task.Delay(250);
+            if (!streamerControl.IsApplied(syncedIds) || bitratePreferences.RequiresRestart) throw new IOException("Streamer restarted, but the helper has not confirmed your changes. Check that helper 0.1.4 is installed.");
             status.Text = "Streamer restarted. Reconnect your headset and reopen Games.";
         }
         catch (Exception e)
@@ -475,7 +500,7 @@ public sealed class LibraryForm : Form
     private void OpenSettings()
     {
         RestoreAndActivate();
-        using var dialog = new SettingsForm(new WindowsStartupRegistration(), traySettings: traySettings);
+        using var dialog = new SettingsForm(new WindowsStartupRegistration(), traySettings: traySettings, bitratePreferences: bitratePreferences);
         dialog.Icon = Icon;
         dialog.ShowDialog(this);
     }
@@ -485,6 +510,8 @@ public sealed class LibraryForm : Form
         if (!traySettings.Enabled && !Visible) RestoreAndActivate();
         trayIcon.Visible = !preview && traySettings.Enabled;
     }
+
+    private void BitrateChanged(object? sender, EventArgs e) { UpdateButtons(); }
 
     internal void ExitApplication()
     {
@@ -508,6 +535,7 @@ public sealed class LibraryForm : Form
         if (disposing)
         {
             traySettings.Changed -= TraySettingChanged;
+            bitratePreferences.Changed -= BitrateChanged;
             trayIcon.Visible = false;
             trayIcon.Dispose(); trayMenu.Dispose(); restartTimer.Dispose(); tip.Dispose();
             statusIcons.Dispose();
