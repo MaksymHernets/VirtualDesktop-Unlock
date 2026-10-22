@@ -49,20 +49,20 @@ public sealed class WindowsStartupRegistration : IStartupRegistration
 
 public sealed class SettingsForm : Form
 {
-    public SettingsForm(IStartupRegistration startup, bool showErrors = true)
+    public SettingsForm(IStartupRegistration startup, bool showErrors = true, TraySettings? traySettings = null)
     {
         Text = "Settings — Virtual Desktop Unlock";
         BackColor = Color.FromArgb(14, 20, 31);
         ForeColor = Color.White;
         Font = new Font("Segoe UI", 10);
-        ClientSize = new Size(540, 320);
+        ClientSize = new Size(540, 368);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = MinimizeBox = false;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
         AutoScaleMode = AutoScaleMode.Dpi;
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24), ColumnCount = 1, RowCount = 6 };
-        foreach (int height in new[] { 40, 32, 44, 48, 48, 44 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24), ColumnCount = 1, RowCount = 7 };
+        foreach (int height in new[] { 40, 32, 44, 48, 48, 48, 44 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         Controls.Add(root);
         root.Controls.Add(new Label { Text = "Settings", AutoSize = true, Font = new Font(Font.FontFamily, 19, FontStyle.Bold) }, 0, 0);
         root.Controls.Add(new Label { Text = "Language · Coming in a future update", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(159, 176, 199) }, 0, 1);
@@ -88,9 +88,22 @@ public sealed class SettingsForm : Form
             }
         };
         root.Controls.Add(autoStart, 0, 3);
-        root.Controls.Add(new FutureOptionCheckBox { Text = "Remove streaming bitrate limits · Coming later", Enabled = false, AutoSize = true, Anchor = AnchorStyles.Left, AccessibleName = "Remove streaming bitrate limits" }, 0, 4);
+        var tray = new CheckBox { Text = "Show in system tray (close window to tray)", AutoSize = true, Anchor = AnchorStyles.Left, AccessibleName = "Show in system tray", Checked = traySettings?.Enabled ?? true };
+        bool updatingTray = false;
+        tray.CheckedChanged += (_, _) =>
+        {
+            if (updatingTray || traySettings == null) return;
+            try { traySettings.SetEnabled(tray.Checked); }
+            catch (Exception e)
+            {
+                updatingTray = true; tray.Checked = !tray.Checked; updatingTray = false;
+                if (showErrors) MessageBox.Show(this, e.Message, "Could not save system tray setting", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        };
+        root.Controls.Add(tray, 0, 4);
+        root.Controls.Add(new FutureOptionCheckBox { Text = "Remove streaming bitrate limits · Coming later", Enabled = false, AutoSize = true, Anchor = AnchorStyles.Left, AccessibleName = "Remove streaming bitrate limits" }, 0, 5);
         var close = new Button { Text = "Done", DialogResult = DialogResult.OK, Size = new Size(100, 34), Anchor = AnchorStyles.Right, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(108, 218, 188), ForeColor = BackColor };
-        root.Controls.Add(close, 0, 5);
+        root.Controls.Add(close, 0, 6);
         AcceptButton = CancelButton = close;
     }
 }

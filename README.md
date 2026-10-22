@@ -2,7 +2,7 @@
 
 # Virtual Desktop Unlock
 
-**v0.1.2** · Windows x64 · Unofficial · MIT
+**v0.1.3** · Windows x64 · Unofficial · MIT
 
 An unofficial program for extending Virtual Desktop Streaming. Add custom Steam games, including games that use third-party VR mods, to Virtual Desktop's actual headset Games tab using the optional runtime helper. The desktop companion app organizes your installed Steam games and saves selections for the helper. Increasing video streaming bitrate limits is planned for a future update; the current Settings option is disabled.
 
@@ -20,6 +20,10 @@ When the saved selection differs from the running helper's confirmed selection, 
 ## Download and run
 
 Use the gear beside **Virtual Desktop Unlock** to open Settings. **Launch automatically when Windows starts** saves immediately for the current Windows user. Keep the app in its current folder, or disable and enable this option after moving it. Language selection and streaming bitrate-limit removal are disabled placeholders for future updates.
+
+**Show in system tray** is enabled by default. Closing the window keeps the app running in the tray. Double-click the icon or choose **Open** to restore the window; the tray menu also includes **Settings** and **Exit**. Disabling this setting removes the icon and restores normal close-to-exit behavior. The preference is saved in `%APPDATA%\Virtual Desktop Unlock\Settings.json`.
+
+The window and tray icons update automatically with status: a white lock when ready, red when Streamer is stopped with a loaded library, and orange while the app library is not loaded (including when Streamer is also stopped). The tray tooltip describes the current state.
 
 The status block shows whether Streamer is running and the app's library is loaded. It turns green when both are ready, red when Streamer is stopped with a loaded library, and orange while the library is not loaded. The right-hand **VD cache games** panel contains your saved selection for the headset library.
 
@@ -64,8 +68,8 @@ That test uses an isolated configuration directory and does not launch a VR game
 - `SteamVRLibrary/`: WinForms companion app and tests.
 - `src/RuntimeOverrides/`: .NET Framework startup helper, configuration, and test harness.
 - `scripts/`: optional integration installer, uninstaller, and launchers.
-- `assets/`: original SVG, PNG, and Windows ICO icon.
-- `tools/generate-icon.py`: icon renderer (Python + Pillow), needed only when regenerating artwork.
+- `assets/`: edited Streamer-derived icon master, PNG, Windows ICO, and artwork attribution.
+- `tools/generate-icon.py`: icon packager (Python + Pillow), needed only when regenerating icon sizes.
 - `docs/verification.md`: compatibility and verification scope.
 
-The MIT license applies to this project's original code and artwork. Install Virtual Desktop and Steam separately from their official sources.
+The MIT license applies to this project's original code. The icon incorporates Virtual Desktop branding; see [artwork attribution](assets/README.md). Install Virtual Desktop and Steam separately from their official sources.

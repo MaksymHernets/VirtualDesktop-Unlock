@@ -69,6 +69,12 @@ public sealed class LibraryForm : Form
     private static readonly Color Muted = Color.FromArgb(159, 176, 199);
     private static readonly Color Accent = Color.FromArgb(108, 218, 188);
     private readonly bool preview;
+    private readonly TraySettings traySettings;
+    private readonly NotifyIcon trayIcon = new();
+    private readonly StatusIcons statusIcons = new();
+    internal ConnectionIcon CurrentIconState { get; private set; } = ConnectionIcon.Unloaded;
+    private readonly ContextMenuStrip trayMenu = new();
+    private bool exiting;
     private readonly LibraryStore store;
     private readonly SharedOverrides sharedOverrides;
     private readonly ListView steam = MakeList();
@@ -96,15 +102,27 @@ public sealed class LibraryForm : Form
     private bool ready;
     private bool busy;
 
-    public LibraryForm(bool preview = false, string? libraryPath = null, IStreamerControl? streamerControl = null)
+    public LibraryForm(bool preview = false, string? libraryPath = null, IStreamerControl? streamerControl = null, TraySettings? traySettings = null)
     {
         this.preview = preview;
         this.streamerControl = streamerControl ?? new StreamerControl();
         store = new LibraryStore(libraryPath ?? Path.Combine(AppContext.BaseDirectory, "Data", "library.json"));
+        this.traySettings = traySettings ?? new TraySettings(preview || libraryPath != null
+            ? Path.Combine(Path.GetDirectoryName(store.Path)!, "Settings.json") : TraySettings.DefaultPath);
         sharedOverrides = new SharedOverrides(preview || libraryPath != null
             ? Path.Combine(Path.GetDirectoryName(store.Path)!, "GameOverrides.xml") : SharedOverrides.DefaultPath);
-        Text = "Virtual Desktop Unlock — v0.1.2";
-        Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath!) ?? SystemIcons.Application;
+        Text = "Virtual Desktop Unlock — v0.1.3";
+        Icon = statusIcons[ConnectionIcon.Unloaded];
+        trayIcon.Icon = Icon;
+        trayIcon.Text = "Virtual Desktop Unlock";
+        trayMenu.Items.Add("Open", null, (_, _) => RestoreAndActivate());
+        trayMenu.Items.Add("Settings", null, (_, _) => OpenSettings());
+        trayMenu.Items.Add(new ToolStripSeparator());
+        trayMenu.Items.Add("Exit", null, (_, _) => ExitApplication());
+        trayIcon.ContextMenuStrip = trayMenu;
+        trayIcon.DoubleClick += (_, _) => RestoreAndActivate();
+        this.traySettings.Changed += TraySettingChanged;
+        trayIcon.Visible = !preview && this.traySettings.Enabled;
         BackColor = Background;
         ForeColor = Color.White;
         Font = new Font("Segoe UI", 10);
@@ -137,12 +155,7 @@ public sealed class LibraryForm : Form
         settings.Font = new Font("Segoe UI Symbol", 21);
         settings.AccessibleName = "Settings";
         tip.SetToolTip(settings, "Settings");
-        settings.Click += (_, _) =>
-        {
-            using var dialog = new SettingsForm(new WindowsStartupRegistration());
-            dialog.Icon = Icon;
-            dialog.ShowDialog(this);
-        };
+        settings.Click += (_, _) => OpenSettings();
         heading.Controls.Add(settings);
         titleRow.Controls.Add(heading, 0, 0);
         refresh.Dock = DockStyle.Fill;
@@ -392,6 +405,14 @@ public sealed class LibraryForm : Form
     internal void UpdateConnectionStatus()
     {
         bool running = streamerControl.IsRunning;
+        var iconState = StatusIcons.Select(running, ready);
+        if (iconState != CurrentIconState)
+        {
+            CurrentIconState = iconState;
+            Icon = statusIcons[iconState];
+            trayIcon.Icon = Icon;
+        }
+        trayIcon.Text = $"Virtual Desktop Unlock — {(iconState == ConnectionIcon.Unloaded ? "Library not loaded" : iconState == ConnectionIcon.Stopped ? "Streamer stopped" : "Ready")}";
         connectionStatus.Text = $"VIRTUAL DESKTOP   ·   Streamer: {(running ? "Running" : "Not running")}   ·   Library: {(ready ? "Loaded" : "Not loaded")}";
         connectionStatus.BackColor = !ready ? Color.FromArgb(83, 52, 18)
             : running ? Color.FromArgb(22, 48, 49) : Color.FromArgb(77, 28, 36);
@@ -451,8 +472,48 @@ public sealed class LibraryForm : Form
         NativeWindowActivation.SetForegroundWindow(Handle);
     }
 
+    private void OpenSettings()
+    {
+        RestoreAndActivate();
+        using var dialog = new SettingsForm(new WindowsStartupRegistration(), traySettings: traySettings);
+        dialog.Icon = Icon;
+        dialog.ShowDialog(this);
+    }
+
+    private void TraySettingChanged(object? sender, EventArgs e)
+    {
+        if (!traySettings.Enabled && !Visible) RestoreAndActivate();
+        trayIcon.Visible = !preview && traySettings.Enabled;
+    }
+
+    internal void ExitApplication()
+    {
+        exiting = true;
+        Close();
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (e.CloseReason == CloseReason.UserClosing && traySettings.Enabled && !exiting)
+        {
+            e.Cancel = true;
+            Hide();
+            ShowInTaskbar = false;
+        }
+        base.OnFormClosing(e);
+    }
+
     protected override void Dispose(bool disposing)
-    { if (disposing) { restartTimer.Dispose(); tip.Dispose(); } base.Dispose(disposing); }
+    {
+        if (disposing)
+        {
+            traySettings.Changed -= TraySettingChanged;
+            trayIcon.Visible = false;
+            trayIcon.Dispose(); trayMenu.Dispose(); restartTimer.Dispose(); tip.Dispose();
+            statusIcons.Dispose();
+        }
+        base.Dispose(disposing);
+    }
 }
 
 internal sealed class ThemeButton : Button

@@ -95,9 +95,13 @@ internal static class SelfTests
                 Check(form.Text.StartsWith("Virtual Desktop Unlock") && controls.OfType<Label>().Any(x => x.Text == "VD cache games")
                     && !controls.Any(x => x.Text.Contains("Steam VR Library")), "Uses the new application and cache panel names without the old label");
                 Check(banner.Text.Contains("Streamer: Running") && banner.Text.Contains("Library: Loaded") && banner.BackColor == Color.FromArgb(22, 48, 49), "Running Streamer and loaded library show green status");
+                var readyIcon = form.Icon;
+                Check(form.CurrentIconState == ConnectionIcon.Ready, "Running Streamer with loaded library uses the white-lock ready icon");
                 streamer.IsRunning = false; form.UpdateConnectionStatus();
                 Check(banner.Text.Contains("Streamer: Not running") && banner.Text.Contains("Library: Loaded") && banner.BackColor == Color.FromArgb(77, 28, 36), "Stopped Streamer with loaded library shows red status");
+                Check(form.CurrentIconState == ConnectionIcon.Stopped && !ReferenceEquals(readyIcon, form.Icon), "Stopping Streamer switches the window and tray icon state to red");
                 streamer.IsRunning = true; form.UpdateConnectionStatus();
+                Check(form.CurrentIconState == ConnectionIcon.Ready && ReferenceEquals(readyIcon, form.Icon), "Restarting Streamer restores the ready icon");
                 var restart = controls.OfType<LinkLabel>().Single(x => x.AccessibleName == "Restart Streamer");
                 Check(left.Items.Count == 1 && right.Items.Count == 1, "UI seeds only installed cached VR games");
                 left.Items[0].Selected = true; addButton.PerformClick();
@@ -152,17 +156,30 @@ internal static class SelfTests
                 var banner = unloaded.Controls[0].Controls.OfType<Label>().Single(x => x.AccessibleName == "Virtual Desktop status");
                 streamer.IsRunning = false; unloaded.UpdateConnectionStatus();
                 Check(banner.Text.Contains("Streamer: Not running") && banner.Text.Contains("Library: Not loaded") && banner.BackColor == Color.FromArgb(83, 52, 18), "Stopped Streamer and unloaded library show orange status");
+                Check(unloaded.CurrentIconState == ConnectionIcon.Unloaded, "Unloaded library uses orange even when Streamer is stopped");
                 streamer.IsRunning = true; unloaded.UpdateConnectionStatus();
                 Check(banner.Text.Contains("Streamer: Running") && banner.Text.Contains("Library: Not loaded") && banner.BackColor == Color.FromArgb(83, 52, 18), "Running Streamer while library is not loaded shows orange status");
+                Check(unloaded.CurrentIconState == ConnectionIcon.Unloaded, "Running Streamer retains orange until the library loads");
+                unloaded.LoadPreview(scan);
+                Check(unloaded.CurrentIconState == ConnectionIcon.Ready, "Loading the library switches orange back to the ready icon");
             }
             File.WriteAllLines(Path.Combine(root, "results.txt"), checks);
             var startup = new TestStartupRegistration();
-            using (var settings = new SettingsForm(startup, showErrors: false))
+            var trayPath = Path.Combine(root, "Preferences", "Settings.json");
+            var traySettings = new TraySettings(trayPath);
+            Check(traySettings.Enabled && !File.Exists(trayPath), "System tray is enabled by default without overwriting settings");
+            using (var settings = new SettingsForm(startup, showErrors: false, traySettings: traySettings))
             {
                 settings.ShowInTaskbar = false; settings.StartPosition = FormStartPosition.Manual;
                 settings.Location = new Point(-20000, -20000); settings.Show(); Application.DoEvents();
                 var settingsControls = settings.Controls[0].Controls.Cast<Control>().ToArray();
                 var autoStart = settingsControls.OfType<CheckBox>().Single(c => c.AccessibleName == "Launch at Windows startup");
+                var tray = settingsControls.OfType<CheckBox>().Single(c => c.AccessibleName == "Show in system tray");
+                Check(tray.Checked, "Settings shows the enabled-by-default system tray option");
+                tray.Checked = false;
+                Check(!traySettings.Enabled && !new TraySettings(trayPath).Enabled, "Disabling the system tray persists across settings reload");
+                tray.Checked = true;
+                Check(new TraySettings(trayPath).Enabled, "Re-enabling the system tray persists across settings reload");
                 Check(!autoStart.Checked && startup.Writes == 0, "Opening settings leaves Windows startup unchanged");
                 Check(!settingsControls.OfType<ComboBox>().Single().Enabled && !settingsControls.OfType<CheckBox>().Single(c => c.AccessibleName == "Remove streaming bitrate limits").Enabled, "Future language and bitrate options are disabled");
                 autoStart.Checked = true;
@@ -179,6 +196,26 @@ internal static class SelfTests
             using (var settings = new SettingsForm(startup, showErrors: false))
             {
                 Check(settings.Controls[0].Controls.OfType<CheckBox>().Single(c => c.AccessibleName == "Launch at Windows startup").Checked, "Reopened settings reflect persisted startup preference");
+            }
+            using (var trayForm = new LibraryForm(true, Path.Combine(root, "TrayUI", "library.json"), streamer, traySettings))
+            {
+                trayForm.LoadPreview(scan); trayForm.ShowInTaskbar = false;
+                trayForm.StartPosition = FormStartPosition.Manual; trayForm.Location = new Point(-20000, -20000);
+                trayForm.Show(); Application.DoEvents();
+                trayForm.Close();
+                Check(!trayForm.IsDisposed && !trayForm.Visible && !trayForm.ShowInTaskbar, "Close hides the window to tray while enabled");
+                trayForm.RestoreAndActivate(); Application.DoEvents();
+                Check(trayForm.Visible && trayForm.ShowInTaskbar, "Tray Open restores the window and taskbar entry");
+                trayForm.Close(); traySettings.SetEnabled(false); Application.DoEvents();
+                Check(trayForm.Visible && trayForm.ShowInTaskbar, "Disabling tray mode restores a hidden window");
+                trayForm.Close();
+                Check(trayForm.IsDisposed, "Close exits normally when system tray is disabled");
+            }
+            traySettings.SetEnabled(true);
+            using (var exitForm = new LibraryForm(true, Path.Combine(root, "TrayExit", "library.json"), streamer, traySettings))
+            {
+                exitForm.ShowInTaskbar = false; exitForm.Show(); Application.DoEvents(); exitForm.ExitApplication();
+                Check(exitForm.IsDisposed, "Tray Exit closes the application even when tray mode is enabled");
             }
             File.WriteAllLines(Path.Combine(root, "results.txt"), checks);
             File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "self-test-result.txt"), string.Join(Environment.NewLine, checks));

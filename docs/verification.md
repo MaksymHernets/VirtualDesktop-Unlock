@@ -1,5 +1,11 @@
 # Verification
 
+## 0.1.3 system tray
+
+The system tray setting defaults to enabled and persists in the current user's AppData settings file. Automated checks cover the default, saved disable/enable, close-to-tray, restoring the window and taskbar entry, disabling tray mode while hidden, normal closing when disabled, and explicit Exit while enabled. Preview and automated tests suppress actual tray icons and use isolated preference files. The Settings window with the new checkbox was rendered and visually inspected.
+
+Window and tray icons use embedded white, red and orange open-padlock variants. Tests cover transitions to red when Streamer stops, back to white when it restarts with a loaded library, and orange while the app library is not loaded. Orange takes priority if Streamer is also stopped. The generated artwork was visually inspected and packaged into 16–256 pixel Windows icons with transparency.
+
 ## 0.1.2 settings and interface
 
 The application and executable are named Virtual Desktop Unlock. The right panel is labeled VD cache games. The status block updates every three seconds: green for a running Streamer with a loaded app library, red for a stopped Streamer with a loaded library, and orange while the app library is not loaded. This reports the desktop app's library load state; the restart link separately tracks whether the helper has applied the selected IDs.
@@ -26,4 +32,4 @@ Automated checks cover:
 - Loading the .NET startup manager from an application configuration file.
 - Optional delayed helper initialization against a locally supplied supported Streamer binary.
 
-The v0.1.0 release supports only RE3 and does not sync selections. Source version v0.1.2 supports all selected Steam IDs with Streamer 1.34.23.0 and helper v0.1.1; arbitrary games have not each been tested in the headset. The release installer refuses any other executable hash, refuses unrelated existing configuration/helper files, and has not been tested against future Streamer updates. Neither proprietary binaries nor personal test logs are redistributed.
+The v0.1.0 release supports only RE3 and does not sync selections. Version v0.1.3 supports all selected Steam IDs with Streamer 1.34.23.0 and helper v0.1.1; arbitrary games have not each been tested in the headset. The release installer refuses any other executable hash, refuses unrelated existing configuration/helper files, and has not been tested against future Streamer updates. Neither proprietary binaries nor personal test logs are redistributed.

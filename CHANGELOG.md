@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3 — 2026-10-22
+
+- Add red (Streamer stopped) and orange (library not loaded) lock variants; switch window and tray icons automatically and show status in the tray tooltip.
+- Replace the application and tray artwork with the extracted Streamer monitor icon plus an open-padlock badge.
+- Add a system tray icon with Open, Settings, and Exit actions; double-click restores the window.
+- Add a persisted Show in system tray setting, enabled by default. Closing the window hides it to the tray while enabled; disabling the setting restores normal close-to-exit behavior.
+- Restore the window before removing its tray icon when the setting is disabled.
+
 ## 0.1.2 — 2026-10-22
 
 - Add a gear button next to the application title and a Settings window.

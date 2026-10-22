@@ -2,7 +2,7 @@
 param([string]$StreamerPath,[switch]$SkipTests)
 $ErrorActionPreference='Stop'
 $root=$PSScriptRoot
-$version='0.1.2'
+$version='0.1.3'
 $env:DOTNET_CLI_HOME=Join-Path $root '.dotnet-build'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT='1'
 $env:DOTNET_GENERATE_ASPNET_CERTIFICATE='false'
@@ -66,6 +66,8 @@ foreach($name in @('Virtual Desktop Unlock.exe','Virtual Desktop Unlock.dll','Vi
 Copy-Item -LiteralPath $hook -Destination $stage -Recurse
 Get-ChildItem -LiteralPath (Join-Path $root 'scripts') -File | Copy-Item -Destination $stage
 foreach($name in @('README.md','LICENSE','CHANGELOG.md')){Copy-Item -LiteralPath (Join-Path $root $name) -Destination $stage}
+New-Item -ItemType Directory -Path (Join-Path $stage 'assets') -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $root 'assets\README.md') -Destination (Join-Path $stage 'assets\README.md')
 $zip=Join-Path $dist ('VirtualDesktopUnlock-v'+$version+'-win-x64.zip')
 Compress-Archive -LiteralPath $stage -DestinationPath $zip -Force
 $sum=(Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()+'  '+(Split-Path -Leaf $zip)
