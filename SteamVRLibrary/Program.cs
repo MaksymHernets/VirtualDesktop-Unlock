@@ -348,7 +348,7 @@ public sealed class LibraryForm : Form
         finally { updating = false; UpdateButtons(); }
     }
 
-    private static void Fill(ListView list, IEnumerable<Game> games, HashSet<string> selected)
+    private void Fill(ListView list, IEnumerable<Game> games, HashSet<string> selected)
     {
         list.BeginUpdate();
         try
@@ -356,12 +356,33 @@ public sealed class LibraryForm : Form
             list.Items.Clear();
             foreach (var game in games)
             {
-                var item = new ListViewItem(game.Name) { Tag = game, ToolTipText = Localizer.T("Steam app {0}",game.Id)+$"\n{game.InstallDirectory}\n{Localizer.T(game.Origin)}", Selected = selected.Contains(game.Id) };
+                var item = new ListViewItem(game.Name) { Tag = game, ForeColor = GameColor(list, game), ToolTipText = Localizer.T("Steam app {0}",game.Id)+$"\n{game.InstallDirectory}\n{Localizer.T(game.Origin)}", Selected = selected.Contains(game.Id) };
                 item.SubItems.Add(Localizer.T(game.Installed ? "Installed" : "Not installed"));
                 list.Items.Add(item);
             }
         }
         finally { list.EndUpdate(); }
+    }
+
+    private Color GameColor(ListView list, Game game) => list != vr ? list.ForeColor
+        : !scan.CachedVrIds.Contains(game.Id) ? Color.FromArgb(255, 192, 105)
+        : scan.MetadataVrIds.Contains(game.Id) ? Color.FromArgb(105, 177, 255) : list.ForeColor;
+
+    private void UpdateGameColors()
+    {
+        if (!ready) return;
+        if (!preview)
+        {
+            try { scan = scan with { CachedVrIds = SteamScanner.ReadVrCache(SteamScanner.CachePath) }; }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException)
+            { return; } // Retain the last complete cache snapshot while Streamer is writing it.
+        }
+        foreach (ListViewItem item in vr.Items)
+            if (item.Tag is Game game)
+            {
+                var color = GameColor(vr, game);
+                if (item.ForeColor != color) item.ForeColor = color;
+            }
     }
 
     private void SelectionChanged(ListView source, ListView other)
@@ -427,6 +448,7 @@ public sealed class LibraryForm : Form
 
     private void UpdateRestartNotice()
     {
+        UpdateGameColors();
         UpdateConnectionStatus();
         string previousBitrateText=bitrate.Text;
         Localizer.SetText(bitrate,bitratePreferences.Configuration.Enabled ? "Restore bitrate limits" : "Remove bitrate limits");

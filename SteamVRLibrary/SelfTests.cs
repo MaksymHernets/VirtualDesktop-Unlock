@@ -34,6 +34,7 @@ internal static class SelfTests
             var cache = Path.Combine(root, "GameSettings.json");
             var cacheText = "{\"SteamProductInfos\":{\"111\":{\"OpenVRSupport\":true},\"952060\":{\"OpenXRSupport\":false},\"999\":{\"OpenXRSupport\":true}}}";
             File.WriteAllText(cache, cacheText);
+            SteamMetadataTests.Run(steam, Check);
             var scan = SteamScanner.Scan(steam, cache);
             Check(scan.Warnings.Count == 0 && scan.Games.Count == 2, "Scans multiple Steam libraries; excludes tools, missing installs and escaped paths");
             Check(scan.Games.Single(g => g.Id == "952060").InstallDirectory.Contains("Second library ü"), "Handles spaces, Unicode and VDF backslash escapes");
@@ -110,8 +111,19 @@ internal static class SelfTests
                 Check(!VirtualDesktop.Unlock.BitrateConfiguration.Read(bitratePath).Enabled && bitrateButton.Text == "Remove bitrate limits", "Main bitrate button restores stock limits persistently");
                 var restart = controls.OfType<LinkLabel>().Single(x => x.AccessibleName == "Restart Streamer");
                 Check(left.Items.Count == 1 && right.Items.Count == 1, "UI seeds only installed cached VR games");
+                Check(right.Items[0].ForeColor == Color.FromArgb(105,177,255) && left.Items[0].ForeColor == left.ForeColor,
+                    "Only VD cache rows backed by original Steam VR metadata appear blue");
                 left.Items[0].Selected = true; addButton.PerformClick();
                 Check(left.Items.Count == 0 && right.Items.Count == 2 && new LibraryStore(uiPath).Load()!.Games.Count == 2, "Add button moves RE3 and persists the selection");
+                Check(right.Items.Cast<ListViewItem>().Single(x => ((Game)x.Tag!).Id == "952060").ForeColor == Color.FromArgb(255,192,105),
+                    "A selected game absent from the VD cache appears orange");
+                form.LoadPreview(scan with { CachedVrIds = scan.CachedVrIds.Append("952060").ToHashSet() });
+                Check(right.Items.Cast<ListViewItem>().Single(x => ((Game)x.Tag!).Id == "952060").ForeColor == right.ForeColor,
+                    "A custom game returns to normal text once VD caches it");
+                form.LoadPreview(scan with { CachedVrIds = [] });
+                Check(right.Items.Cast<ListViewItem>().All(x => x.ForeColor == Color.FromArgb(255,192,105)),
+                    "Missing VD cache entry takes orange priority over native Steam VR metadata");
+                form.LoadPreview(scan);
                 var uiShared = Path.Combine(Path.GetDirectoryName(uiPath)!, "GameOverrides.xml");
                 Check(ReadSharedIds(uiShared).SequenceEqual(["111", "952060"]), "Add button syncs custom game IDs for the startup helper");
                 Check(restart.Visible && restart.Enabled, "Unapplied selection shows a clickable restart message");
@@ -141,6 +153,7 @@ internal static class SelfTests
                 foreach (ListViewItem item in right.Items) item.Selected = true;
                 removeButton.PerformClick();
                 Check(left.Items.Count == 2 && right.Items.Count == 0 && new LibraryStore(uiPath).Load()!.Games.Count == 0, "Multiple selections can empty the VR library persistently");
+                Check(left.Items.Cast<ListViewItem>().All(x => x.ForeColor == left.ForeColor), "Steam list stays normal even for native VR games");
                 form.Hide();
                 form.WindowState = FormWindowState.Minimized;
                 form.Location = new Point(-20000, -20000);

@@ -59,10 +59,14 @@ public sealed class LibraryStore(string path)
     }
 }
 
-public sealed record ScanResult(List<Game> Games, HashSet<string> CachedVrIds, List<string> Warnings);
+public sealed record ScanResult(List<Game> Games, HashSet<string> CachedVrIds, List<string> Warnings)
+{
+    public HashSet<string> MetadataVrIds { get; init; } = [];
+}
 
 public static class SteamScanner
 {
+    public static string CachePath => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virtual Desktop", "GameSettings.json");
     // Valve's text VDF format allows nested objects, quoted escapes and // comments.
     public static List<string> Tokens(string text)
     {
@@ -167,11 +171,15 @@ public static class SteamScanner
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             { warnings.Add(apps + ": " + e.Message); }
         }
-        cachePath ??= System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virtual Desktop", "GameSettings.json");
+        cachePath ??= CachePath;
         HashSet<string> cached = [];
         try { cached = ReadVrCache(cachePath); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
         { warnings.Add(Localizer.T("Virtual Desktop cache") + ": " + e.Message); }
-        return new ScanResult(games.Values.OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase).ToList(), cached, warnings);
+        HashSet<string> metadataVr = [];
+        try { metadataVr = SteamMetadata.ReadVrIds(System.IO.Path.Combine(steamRoot, "appcache", "appinfo.vdf"), games.Keys.ToHashSet()); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or OverflowException)
+        { warnings.Add("Steam appinfo.vdf: " + e.Message); }
+        return new ScanResult(games.Values.OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase).ToList(), cached, warnings) { MetadataVrIds = metadataVr };
     }
 }

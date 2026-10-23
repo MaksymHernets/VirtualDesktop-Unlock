@@ -6,6 +6,8 @@
 
 An unofficial program for extending Virtual Desktop Streaming. Add custom Steam games, including games that use third-party VR mods, to Virtual Desktop's actual headset Games tab using the optional runtime helper. The desktop companion app organizes your installed Steam games, saves selections for the helper, and provides optional headset-specific bitrate ceilings.
 
+![Virtual Desktop headset Games panel showing custom Steam games, including Gothic and Resident Evil](screenshots/VirtualDesktop.Android-20261022-125310.jpg)
+
 ## Two distinct features
 
 | Feature | Result |
@@ -50,6 +52,8 @@ The x64 helper verifies the supported Streamer binary and installs an in-memory 
 The window and tray icons update automatically with status: a white lock when ready, red when Streamer is stopped with a loaded library, and orange while the app library is not loaded (including when Streamer is also stopped). The tray tooltip describes the current state.
 
 The status block shows whether Streamer is running and the app's library is loaded. It turns green when both are ready, red when Streamer is stopped with a loaded library, and orange while the library is not loaded. The right-hand **VD cache games** panel contains your saved selection for the headset library.
+
+In the right-hand list, **blue** means the game is in VD's cache and Steam's original metadata identifies it as a VR title. **Orange** means the selected game is not yet in VD's cache; the color updates automatically when Streamer caches it. Cached custom additions retain the normal text color. The left-hand Steam list keeps its normal text color. Cache status reflects the PC-side data; reconnect the headset after applying additions to refresh its Games panel.
 
 Download the latest build from [Releases](https://github.com/MaksymHernets/virtual-desktop-unlock/releases), or build this source, and extract it to a writable folder. The 0.1.0 release does not include selection syncing.
 

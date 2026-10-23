@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Highlight cached games in blue only when Steam's original metadata identifies them as VR titles; keep custom additions in the normal text color.
+- Highlight selected games absent from VD's cache in orange and update their colors automatically as the cache changes.
+- Read Steam's local app metadata independently of the helper's forced OpenXR flags, with parser and UI regression checks.
+- Add a headset Games panel screenshot to the README.
+
 ## 0.1.7 — 2026-10-23
 
 - Localize the desktop UI into English, Russian, French, German, Spanish, Simplified Chinese, Japanese, Korean, Hindi and Arabic.
