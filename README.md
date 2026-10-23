@@ -2,7 +2,7 @@
 
 # Virtual Desktop Unlock
 
-**v0.1.4** · Windows x64 · Unofficial · MIT
+**v0.1.5** · Windows x64 · Unofficial · MIT
 
 An unofficial program for extending Virtual Desktop Streaming. Add custom Steam games, including games that use third-party VR mods, to Virtual Desktop's actual headset Games tab using the optional runtime helper. The desktop companion app organizes your installed Steam games, saves selections for the helper, and provides optional headset-specific bitrate ceilings.
 
@@ -18,6 +18,8 @@ An unofficial program for extending Virtual Desktop Streaming. Add custom Steam 
 When the saved selection differs from the running helper's confirmed selection, a **Restart Streamer and reconnect to apply custom additions** link appears below the lists. Click it to close and relaunch Streamer; Windows may request administrator permission. The link clears after the helper confirms the selection. Reconnect the headset and reopen Games afterward. The app also detects restarts performed outside the app; failed or cancelled restarts leave the link available to retry.
 
 ## Download and run
+
+Version 0.1.5 fixes the startup crash caused by an access-denied Streamer status check after reboot. Upgrade the desktop app while keeping your `Data` folder. An installed helper 0.1.4.0 remains compatible and does not need reinstalling for this fix.
 
 Use the gear beside **Virtual Desktop Unlock** to open Settings. **Launch automatically when Windows starts** saves immediately for the current Windows user. Keep the app in its current folder, or disable and enable this option after moving it. Language selection remains a disabled placeholder.
 

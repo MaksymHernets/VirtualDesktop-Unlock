@@ -16,7 +16,10 @@ public sealed class StreamerControl : IStreamerControl
         get
         {
             var processes = Process.GetProcessesByName("VirtualDesktop.Streamer");
-            try { return processes.Any(p => !p.HasExited); }
+            // Enumeration already identifies running processes. HasExited opens a
+            // synchronization handle that Windows may deny for an elevated Streamer.
+            // A process exiting after this snapshot is handled by the next refresh.
+            try { return processes.Length != 0; }
             finally { foreach (var process in processes) process.Dispose(); }
         }
     }
@@ -37,7 +40,7 @@ public sealed class StreamerControl : IStreamerControl
                     var line = lines.LastOrDefault(l => l.Contains(prefix, StringComparison.Ordinal)
                         && DateTimeOffset.TryParse(l.Split(' ')[0], out var time)
                         && time.UtcDateTime >= process.StartTime.ToUniversalTime().AddSeconds(-1));
-                    if (line == null || process.HasExited) continue;
+                    if (line == null) continue;
                     var value = line[(line.IndexOf(prefix, StringComparison.Ordinal) + prefix.Length)..].Split(';')[0];
                     var applied = value.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(uint.Parse).ToHashSet();
                     if (applied.SetEquals(ids)) return true;

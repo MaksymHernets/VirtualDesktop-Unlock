@@ -37,7 +37,9 @@ public sealed class BitratePreferences
             using var reader = XmlReader.Create(StatusPath, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 8192 });
             var root = XDocument.Load(reader).Root!;
             using var process = Process.GetProcessById(int.Parse(root.Attribute("processId")!.Value));
-            return !process.HasExited && process.ProcessName == "VirtualDesktop.Streamer"
+            // Name and start time validate identity with query access; HasExited
+            // unnecessarily requests synchronization access to the elevated process.
+            return process.ProcessName == "VirtualDesktop.Streamer"
                 && process.StartTime.ToUniversalTime().Ticks == long.Parse(root.Attribute("startedUtcTicks")!.Value) ? root : null;
         }
         catch (Exception e) when (e is IOException or XmlException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or FormatException or NullReferenceException) { return null; }

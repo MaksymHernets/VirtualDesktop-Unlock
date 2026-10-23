@@ -1,5 +1,11 @@
 # Verification
 
+## Startup access-denied fix — 2026-10-23
+
+Windows Application event 1026 showed an unhandled Win32Exception (5) in `StreamerControl.IsRunning`, where `Process.HasExited` requested access to the already-running Streamer process during form construction. The startup log had no entry for the failed launches because construction never completed. Running-status detection now uses process enumeration without opening a synchronization handle. Library and bitrate acknowledgement checks also omit `HasExited`, retaining their process-ID/start-time identity checks and existing error handling.
+
+All 63 desktop checks passed. The rebuilt local app was launched by a non-administrator process while the same Streamer process remained running; it constructed and displayed the window and stayed alive through multiple status refreshes. The saved library's SHA-256 was unchanged. This verified the observed access-denied case without changing Streamer or Windows permissions; a further system reboot was not performed.
+
 ## 0.1.4 bitrate control
 
 Tests execute the actual installed 1.34.23 ceiling method after the runtime redirect, its slider interpolation, `UpdateVRBitrates`, and `OculusStreamer` forwarding into uninitialized encoder wrappers. They cover the Quest 3 H.264/H.264+ 1000 Mbps, HEVC/HEVC10 300 Mbps, AV1/AV110 250 Mbps profiles, independent Quest 3S profiles, unconfigured stock behavior, foveation, network limiting, per-view allocation, disable/restore, invalid XML, live update notification and concurrent calls. No actual GPU encoding or headset decoding is performed by this test harness.

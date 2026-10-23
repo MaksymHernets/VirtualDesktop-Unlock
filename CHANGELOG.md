@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5 — 2026-10-23
+
+- Fix startup crashes when Windows denies process synchronization access to an already-running Streamer after reboot.
+- Detect Streamer through process enumeration and remove unnecessary `HasExited` calls from library and bitrate acknowledgement checks.
+- Keep the existing helper 0.1.4.0 and bitrate behavior; upgrading the desktop app does not require reinstalling that helper.
+
 ## 0.1.4 — 2026-10-22
 
 - Add main-screen Remove/Restore bitrate limits controls and a functional Settings checkbox.
