@@ -204,7 +204,7 @@ internal static class SelfTests
                 tray.Checked = true;
                 Check(new TraySettings(trayPath).Enabled, "Re-enabling the system tray persists across settings reload");
                 Check(!autoStart.Checked && startup.Writes == 0, "Opening settings leaves Windows startup unchanged");
-                Check(!settingsControls.OfType<ComboBox>().Single().Enabled, "Future language option remains disabled");
+                Check(settingsControls.OfType<ComboBox>().Single().Enabled && settingsControls.OfType<ComboBox>().Single().Items.Count == 10, "Language picker offers all ten supported languages");
                 var bitrateSetting = settingsControls.OfType<CheckBox>().Single(c => c.AccessibleName == "Remove streaming bitrate limits");
                 Check(bitrateSetting.Enabled, "Bitrate setting is functional rather than a future placeholder");
                 bitrateSetting.Checked = true;
@@ -245,6 +245,7 @@ internal static class SelfTests
                 exitForm.ShowInTaskbar = false; exitForm.Show(); Application.DoEvents(); exitForm.ExitApplication();
                 Check(exitForm.IsDisposed, "Tray Exit closes the application even when tray mode is enabled");
             }
+            LocalizationTests.Run(root, Check);
             File.WriteAllLines(Path.Combine(root, "results.txt"), checks);
             File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "self-test-result.txt"), string.Join(Environment.NewLine, checks));
             return 0;

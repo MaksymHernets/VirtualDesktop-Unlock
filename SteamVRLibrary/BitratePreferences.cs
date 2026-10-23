@@ -61,9 +61,9 @@ public sealed class BitratePreferences
         get { var status=LiveStatus(); return status?.Attribute("unsupported")?.Value == "true" ? status.Attribute("error")?.Value : null; }
     }
     public bool RequiresRestart => UnsupportedReason == null && !Acknowledged && (Configuration.Enabled || LiveStatus()?.Attribute("enabled")?.Value == "true" || LiveStatus()?.Attribute("ready")?.Value == "false");
-    public string StatusText => LoadError != null ? "Could not read bitrate profiles. Open Bitrate profiles and save to repair them."
-        : UnsupportedReason is string reason ? reason
+    public string StatusText => Localizer.T(LoadError != null ? "Could not read bitrate profiles. Open Bitrate profiles and save to repair them."
+        : UnsupportedReason != null ? "Bitrate overrides unavailable on this Streamer version; game-library additions are supported."
         : RequiresRestart ? "Bitrate changes pending · restart Streamer if they do not apply automatically."
         : Configuration.Enabled ? "Higher bitrate limits enabled in Streamer · client performance remains to be tested."
-        : "Stock bitrate limits";
+        : "Stock bitrate limits");
 }

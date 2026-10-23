@@ -55,7 +55,7 @@ public sealed class SettingsForm : Form
         BackColor = Color.FromArgb(14, 20, 31);
         ForeColor = Color.White;
         Font = new Font("Segoe UI", 10);
-        ClientSize = new Size(540, 368);
+        ClientSize = new Size(680, 390);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = MinimizeBox = false;
         ShowInTaskbar = false;
@@ -65,16 +65,26 @@ public sealed class SettingsForm : Form
         foreach (int height in new[] { 40, 32, 44, 48, 48, 48, 44 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         Controls.Add(root);
         root.Controls.Add(new Label { Text = "Settings", AutoSize = true, Font = new Font(Font.FontFamily, 19, FontStyle.Bold) }, 0, 0);
-        root.Controls.Add(new Label { Text = "Language · Coming in a future update", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(159, 176, 199) }, 0, 1);
-        var language = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Enabled = false, Dock = DockStyle.Fill, AccessibleName = "Language" };
-        language.Items.Add("English"); language.SelectedIndex = 0;
+        root.Controls.Add(new Label { Text = "Language", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(159, 176, 199) }, 0, 1);
+        var language = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, AccessibleName = "Language", DisplayMember = "Name", ValueMember = "Code", DataSource = Localizer.Languages };
+        language.BindingContext = new BindingContext(); language.SelectedValue = Localizer.Code;
+        language.SelectedIndexChanged += (_, _) =>
+        {
+            if(language.SelectedItem is not Localizer.Language selected || selected.Code == Localizer.Code)return;
+            try { Localizer.Select(selected.Code); Localizer.Apply(this); }
+            catch(Exception e)
+            {
+                language.SelectedValue=Localizer.Code;
+                if(showErrors)LocalizedMessageBox.Show(this,e.Message,Localizer.T("Could not save language setting"),MessageBoxButtons.OK,MessageBoxIcon.Warning);
+            }
+        };
         root.Controls.Add(language, 0, 2);
         var autoStart = new CheckBox { Text = "Launch automatically when Windows starts", AutoSize = true, Anchor = AnchorStyles.Left, AccessibleName = "Launch at Windows startup" };
         try { autoStart.Checked = startup.Enabled; }
         catch (Exception e)
         {
             autoStart.Enabled = false;
-            if (showErrors) MessageBox.Show(this, e.Message, "Could not read Windows startup setting", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (showErrors) LocalizedMessageBox.Show(this, e.Message, "Could not read Windows startup setting", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         bool updating = false;
         autoStart.CheckedChanged += (_, _) =>
@@ -84,7 +94,7 @@ public sealed class SettingsForm : Form
             catch (Exception e)
             {
                 updating = true; autoStart.Checked = !autoStart.Checked; updating = false;
-                if (showErrors) MessageBox.Show(this, e.Message, "Could not save Windows startup setting", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (showErrors) LocalizedMessageBox.Show(this, e.Message, "Could not save Windows startup setting", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         };
         root.Controls.Add(autoStart, 0, 3);
@@ -97,7 +107,7 @@ public sealed class SettingsForm : Form
             catch (Exception e)
             {
                 updatingTray = true; tray.Checked = !tray.Checked; updatingTray = false;
-                if (showErrors) MessageBox.Show(this, e.Message, "Could not save system tray setting", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (showErrors) LocalizedMessageBox.Show(this, e.Message, "Could not save system tray setting", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         };
         root.Controls.Add(tray, 0, 4);
@@ -110,13 +120,14 @@ public sealed class SettingsForm : Form
             catch (Exception e)
             {
                 updatingBitrate = true; bitrate.Checked = !bitrate.Checked; updatingBitrate = false;
-                if (showErrors) MessageBox.Show(this, e.Message, "Could not save bitrate setting", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (showErrors) LocalizedMessageBox.Show(this, e.Message, "Could not save bitrate setting", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         };
         root.Controls.Add(bitrate, 0, 5);
         var close = new Button { Text = "Done", DialogResult = DialogResult.OK, Size = new Size(100, 34), Anchor = AnchorStyles.Right, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(108, 218, 188), ForeColor = BackColor };
         root.Controls.Add(close, 0, 6);
         AcceptButton = CancelButton = close;
+        Localizer.Apply(this);
     }
 }
 

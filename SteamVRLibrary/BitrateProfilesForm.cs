@@ -8,12 +8,12 @@ public sealed class BitrateProfilesForm : Form
     {
         Text = "Bitrate profiles — Virtual Desktop Unlock";
         BackColor = Color.FromArgb(14, 20, 31); ForeColor = Color.White; Font = new Font("Segoe UI", 10);
-        ClientSize = new Size(570, 400); FormBorderStyle = FormBorderStyle.FixedDialog;
+        ClientSize = new Size(720, 440); FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = MinimizeBox = false; ShowInTaskbar = false; StartPosition = FormStartPosition.CenterParent; AutoScaleMode = AutoScaleMode.Dpi;
         var config = preferences.Configuration.Copy();
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24), ColumnCount = 2, RowCount = 8 };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58)); root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
-        foreach (int height in new[] { 36, 42, 42, 45, 45, 45, 50, 44 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        foreach (int height in new[] { 46, 42, 42, 45, 45, 45, 70, 44 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         Controls.Add(root);
         var title = new Label { Text = "Limits by headset and codec", AutoSize = true, Font = new Font(Font.FontFamily, 17, FontStyle.Bold) };
         root.Controls.Add(title, 0, 0); root.SetColumnSpan(title, 2);
@@ -23,7 +23,7 @@ public sealed class BitrateProfilesForm : Form
         root.Controls.Add(custom, 0, 2); root.SetColumnSpan(custom, 2);
         NumericUpDown Limit(string name, int row)
         {
-            root.Controls.Add(new Label { Text = name + " (Mbps)", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, row);
+            root.Controls.Add(new Label { Text = name + " (" + Localizer.T("Mbps") + ")", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, row);
             var value = new NumericUpDown { Minimum = 10, Maximum = 2000, Increment = 25, ThousandsSeparator = true, Dock = DockStyle.Fill, AccessibleName = name };
             root.Controls.Add(value, 1, row); return value;
         }
@@ -54,9 +54,10 @@ public sealed class BitrateProfilesForm : Form
         save.Click += (_, _) =>
         {
             try { Commit(); preferences.Save(config); DialogResult = DialogResult.OK; Close(); }
-            catch (Exception e) { MessageBox.Show(this, e.Message, "Could not save bitrate profiles", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+            catch (Exception e) { LocalizedMessageBox.Show(this, e.Message, "Could not save bitrate profiles", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
         };
         root.Controls.Add(cancel, 0, 7); root.Controls.Add(save, 1, 7);
         AcceptButton = save; CancelButton = cancel;
+        Localizer.Apply(this);
     }
 }

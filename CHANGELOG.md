@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.7 — 2026-10-23
+
+- Localize the desktop UI into English, Russian, French, German, Spanish, Simplified Chinese, Japanese, Korean, Hindi and Arabic.
+- Automatically select the supported Windows display language on first launch, falling back to English, and persist the user's preference separately from other settings.
+- Enable the Settings language picker with immediate main-window and dialog updates.
+- Translate tray items, tooltips, statuses, counts and application error messages; preserve game titles and codec names.
+- Mirror layout for Arabic and size translated action buttons and status columns to fit their captions.
+- Add catalog completeness, formatting, detection, persistence, live-picker, direction and layout tests with renders of every language.
+
 ## 0.1.6 — 2026-10-23
 
 - Add game-library integration for the verified Streamer 1.34.25.0 binary, retaining support for 1.34.23.0.

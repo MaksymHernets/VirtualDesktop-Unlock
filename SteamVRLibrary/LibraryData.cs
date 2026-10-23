@@ -30,10 +30,10 @@ public sealed class LibraryStore(string path)
         if (!File.Exists(Path)) { fingerprint = null; return null; }
         var bytes = File.ReadAllBytes(Path);
         var state = JsonSerializer.Deserialize<LibraryState>(bytes)
-            ?? throw new InvalidDataException("The saved library is empty.");
+            ?? throw new InvalidDataException(Localizer.T("The saved library is empty."));
         if (state.Version != 1 || state.Games == null || state.Games.Any(g =>
                 g == null || !uint.TryParse(g.Id, out var id) || id == 0 || string.IsNullOrWhiteSpace(g.Name)))
-            throw new InvalidDataException("The saved library has an unsupported format. Your file has been left unchanged.");
+            throw new InvalidDataException(Localizer.T("The saved library has an unsupported format. Your file has been left unchanged."));
         state.Games = state.Games.DistinctBy(g => g.Id).ToList();
         fingerprint = Convert.ToHexString(SHA256.HashData(bytes));
         return state;
@@ -42,7 +42,7 @@ public sealed class LibraryStore(string path)
     public void Save(LibraryState state)
     {
         if (Fingerprint(Path) != fingerprint)
-            throw new IOException("The library changed in another window. Refresh before making more changes.");
+            throw new IOException(Localizer.T("The library changed in another window. Refresh before making more changes."));
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path)!);
         var bytes = JsonSerializer.SerializeToUtf8Bytes(state, Json);
         var temp = Path + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -50,7 +50,7 @@ public sealed class LibraryStore(string path)
         {
             using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             { stream.Write(bytes); stream.Flush(true); }
-            if (Fingerprint(Path) != fingerprint) throw new IOException("The library changed while saving. Refresh and try again.");
+            if (Fingerprint(Path) != fingerprint) throw new IOException(Localizer.T("The library changed while saving. Refresh and try again."));
             if (File.Exists(Path)) File.Replace(temp, Path, Path + ".bak");
             else File.Move(temp, Path);
             fingerprint = Convert.ToHexString(SHA256.HashData(bytes));
@@ -85,7 +85,7 @@ public static class SteamScanner
                     if (c == '\\' && i < text.Length && text[i] is '\\' or '"') c = text[i++];
                     token.Append(c);
                 }
-                if (!closed) throw new InvalidDataException("Unterminated quoted value in Steam manifest.");
+                if (!closed) throw new InvalidDataException(Localizer.T("Unterminated quoted value in Steam manifest."));
             }
             else { while (i < text.Length && !char.IsWhiteSpace(text[i]) && text[i] is not '{' and not '}') token.Append(text[i++]); }
             result.Add(token.ToString());
@@ -139,7 +139,7 @@ public static class SteamScanner
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
-        { warnings.Add("Steam library folders: " + e.Message); }
+        { warnings.Add(Localizer.T("Steam library folders") + ": " + e.Message); }
         var games = new Dictionary<string, Game>();
         foreach (var root in roots)
         {
@@ -171,7 +171,7 @@ public static class SteamScanner
         HashSet<string> cached = [];
         try { cached = ReadVrCache(cachePath); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
-        { warnings.Add("Virtual Desktop cache: " + e.Message); }
+        { warnings.Add(Localizer.T("Virtual Desktop cache") + ": " + e.Message); }
         return new ScanResult(games.Values.OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase).ToList(), cached, warnings);
     }
 }

@@ -2,7 +2,7 @@
 
 # Virtual Desktop Unlock
 
-**v0.1.6** · Windows x64 · Unofficial · MIT
+**v0.1.7** · Windows x64 · Unofficial · MIT
 
 An unofficial program for extending Virtual Desktop Streaming. Add custom Steam games, including games that use third-party VR mods, to Virtual Desktop's actual headset Games tab using the optional runtime helper. The desktop companion app organizes your installed Steam games, saves selections for the helper, and provides optional headset-specific bitrate ceilings.
 
@@ -23,7 +23,9 @@ Version 0.1.5 fixes the startup crash caused by an access-denied Streamer status
 
 Version 0.1.6 adds game-library support for Streamer 1.34.25.0. That Streamer update requires helper 0.1.6.0; older helpers reject it and leave custom games unapplied. Bitrate overrides remain limited to Streamer 1.34.23.0. On 1.34.25.0, the helper reports bitrate overrides as unavailable while applying game additions independently.
 
-Use the gear beside **Virtual Desktop Unlock** to open Settings. **Launch automatically when Windows starts** saves immediately for the current Windows user. Keep the app in its current folder, or disable and enable this option after moving it. Language selection remains a disabled placeholder.
+Use the gear beside **Virtual Desktop Unlock** to open Settings. **Launch automatically when Windows starts** saves immediately for the current Windows user. Keep the app in its current folder, or disable and enable this option after moving it.
+
+The app supports English, Russian, French, German, Spanish, Chinese (Simplified), Japanese, Korean, Hindi and Arabic. On first launch it selects the current Windows display language if supported, otherwise English. Regional variants map to their supported language (for example, French Canada uses French). Change **Language** in Settings to apply a new language immediately; your choice is saved in `%APPDATA%\Virtual Desktop Unlock\Language.json` and takes precedence on subsequent launches. Arabic uses a mirrored right-to-left layout. Game titles, product names and codec identifiers remain unchanged. Localization does not require a helper reinstall.
 
 ## Higher bitrate limits
 

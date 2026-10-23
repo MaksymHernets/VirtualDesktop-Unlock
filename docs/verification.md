@@ -1,5 +1,13 @@
 # Verification
 
+## Localization — 2026-10-23
+
+Ten embedded catalogs each contain 115 keys. Tests check identical key sets, nonempty values and matching format placeholders. Detection covers all ten languages, regional variants such as fr-CA and zh-TW, and unsupported-language English fallback. Preference tests cover initial detection/persistence, explicit-choice precedence after restart and Windows language changes, and recovery from malformed JSON. Tests use isolated preference paths and leave the real user's language, tray and startup settings untouched.
+
+Main-window, Settings and bitrate-profile previews are generated for every language. Button caption widths and control bounds are checked, including the main window at minimum size. Live Arabic-to-French switching restores left-to-right layout; changing the Settings picker to Russian immediately updates both windows and persists for the next launch. Arabic, German, Russian, Hindi and Japanese renders were visually inspected; German action widths and Arabic alignment were corrected. OS-provided exception details, game titles, product names and codec identifiers are intentionally not translated by the catalogs.
+
+The final build passed 131 desktop/localization checks plus the helper loading/library scenarios on Streamer 1.34.25. ISO helper-log timestamps are parsed with invariant culture, with regression checks in every UI culture (including Arabic calendars), so localization does not break acknowledgement. The local 0.1.7 app opened successfully, persisted its initial English selection and retained the exact saved-library hash. The installed helper and running Streamer were not replaced or restarted for localization.
+
 ## Streamer 1.34.25 library compatibility — 2026-10-23
 
 The missing custom games were caused by the old helper's explicit 1.34.23 version guard. Inspection of 1.34.25 identified the same 13 built-in game exceptions and OpenXR enum value 3; isolated test-directory fields moved from metadata tokens 0x0401483F/0x04014840 to 0x04014843/0x04014844. Helper 0.1.6.0 accepts only the exact verified SHA-256 hashes of 1.34.23.0 and 1.34.25.0 and uses the corresponding test-directory mapping.
