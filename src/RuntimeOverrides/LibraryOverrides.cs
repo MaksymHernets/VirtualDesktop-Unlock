@@ -6,10 +6,11 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Collections.Generic;
 using System.Xml;
+using System.Security.Cryptography;
 
-[assembly: AssemblyVersion("0.1.4.0")]
+[assembly: AssemblyVersion("0.1.6.0")]
 [assembly: AssemblyTitle("Virtual Desktop Library Overrides")]
-[assembly: AssemblyFileVersion("0.1.4.0")]
+[assembly: AssemblyFileVersion("0.1.6.0")]
 
 namespace VirtualDesktop.LibraryOverrides
 {
@@ -61,14 +62,19 @@ namespace VirtualDesktop.LibraryOverrides
             if (Interlocked.CompareExchange(ref installed, 1, 0) != 0) return;
             try
             {
-                if (assembly.GetName().Version != new Version(1, 34, 23, 0))
-                    throw new NotSupportedException("This library override was verified only with Streamer 1.34.23.0.");
+                bool updated=assembly.GetName().Version==new Version(1,34,25,0);
+                if (!updated && assembly.GetName().Version != new Version(1, 34, 23, 0))
+                    throw new NotSupportedException("Library overrides support only verified Streamer 1.34.23.0 and 1.34.25.0 binaries.");
+                string expectedHash=updated?"0229A322137F55687240D2B51F5F7002056D9277D7FA001EC6CB4EB25AF0BFB8":"FEAD548C57DF539006E6C97A7A29D46FDE172F756F40D65DBDB77ABAAFA3AEAD";
+                using(var sha=SHA256.Create())
+                    if(BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(assembly.Location))).Replace("-","")!=expectedHash)
+                        throw new NotSupportedException("Streamer binary does not match a verified library override build.");
                 string testDirectory = Environment.GetEnvironmentVariable("VD_LIBRARY_TEST_DATA");
                 if (!String.IsNullOrEmpty(testDirectory))
                 {
                     if (!Directory.Exists(testDirectory)) throw new DirectoryNotFoundException(testDirectory);
-                    assembly.ManifestModule.ResolveField(0x0401483f).SetValue(null, testDirectory);
-                    assembly.ManifestModule.ResolveField(0x04014840).SetValue(null, testDirectory);
+                    assembly.ManifestModule.ResolveField(updated?0x04014843:0x0401483f).SetValue(null, testDirectory);
+                    assembly.ManifestModule.ResolveField(updated?0x04014844:0x04014840).SetValue(null, testDirectory);
                 }
                 Type manager = assembly.GetType("VirtualDesktop.Streamer.GameManager", true);
                 RuntimeHelpers.RunClassConstructor(manager.TypeHandle);

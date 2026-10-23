@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.6 — 2026-10-23
+
+- Add game-library integration for the verified Streamer 1.34.25.0 binary, retaining support for 1.34.23.0.
+- Validate exact executable hashes and use the inspected per-version test-directory fields.
+- Apply library selections independently of bitrate support. On 1.34.25.0, report bitrate overrides as unavailable without repeatedly requesting a restart for that limitation.
+- Extend installer manifest compatibility and test both Streamer versions. Keep the native bitrate patch restricted to 1.34.23.0.
+
 ## 0.1.5 — 2026-10-23
 
 - Fix startup crashes when Windows denies process synchronization access to an already-running Streamer after reboot.

@@ -38,7 +38,15 @@ namespace VirtualDesktop.LibraryOverrides
         public static void Install(Assembly assembly, Action<string> logger)
         {
             if (installed) return;
-            if (IntPtr.Size != 8 || assembly.GetName().Version != new Version(1,34,23,0)) throw new NotSupportedException("Bitrate overrides require x64 Streamer 1.34.23.0.");
+            if (assembly.GetName().Version != new Version(1,34,23,0))
+            {
+                log=logger;
+                try { current=BitrateConfiguration.Read(ConfigurationPath);revision=BitrateConfiguration.Revision(ConfigurationPath); }
+                catch { current=new BitrateConfiguration();revision=null; }
+                string reason="Bitrate overrides are unavailable on Streamer "+assembly.GetName().Version+"; game-library additions are supported. Stock bitrate behavior retained.";
+                WriteStatus(false,reason,true);logger(reason);return;
+            }
+            if (IntPtr.Size != 8) throw new NotSupportedException("Bitrate overrides require x64 Streamer 1.34.23.0.");
             using (var sha = SHA256.Create())
                 if (BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(assembly.Location))).Replace("-", "") != "FEAD548C57DF539006E6C97A7A29D46FDE172F756F40D65DBDB77ABAAFA3AEAD")
                     throw new NotSupportedException("Bitrate override executable hash does not match the verified Streamer.");
@@ -240,7 +248,7 @@ namespace VirtualDesktop.LibraryOverrides
                 if(error!=lastDiagnostics){log("Bitrate live settings "+error);lastDiagnostics=error;}
             }
         }
-        private static void WriteStatus(bool success, string error)
+        private static void WriteStatus(bool success, string error, bool unsupported=false)
         {
             try
             {
@@ -253,6 +261,7 @@ namespace VirtualDesktop.LibraryOverrides
                     writer.WriteAttributeString("startedUtcTicks",Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks.ToString());
                     writer.WriteAttributeString("revision",revision??"invalid"); writer.WriteAttributeString("enabled",current.Enabled?"true":"false");
                     writer.WriteAttributeString("ready",success?"true":"false"); if(error!=null)writer.WriteAttributeString("error",error);
+                    if(unsupported)writer.WriteAttributeString("unsupported","true");
                     writer.WriteEndElement();
                 }
                 if(File.Exists(StatusPath))File.Replace(temp,StatusPath,StatusPath+".bak");else File.Move(temp,StatusPath);

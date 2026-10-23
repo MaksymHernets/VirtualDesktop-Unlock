@@ -118,7 +118,7 @@ public sealed class LibraryForm : Form
         bitratePreferences.Changed += BitrateChanged;
         sharedOverrides = new SharedOverrides(preview || libraryPath != null
             ? Path.Combine(Path.GetDirectoryName(store.Path)!, "GameOverrides.xml") : SharedOverrides.DefaultPath);
-        Text = "Virtual Desktop Unlock — v0.1.5";
+        Text = "Virtual Desktop Unlock — v0.1.6";
         Icon = statusIcons[ConnectionIcon.Unloaded];
         trayIcon.Icon = Icon;
         trayIcon.Text = "Virtual Desktop Unlock";

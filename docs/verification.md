@@ -1,5 +1,13 @@
 # Verification
 
+## Streamer 1.34.25 library compatibility — 2026-10-23
+
+The missing custom games were caused by the old helper's explicit 1.34.23 version guard. Inspection of 1.34.25 identified the same 13 built-in game exceptions and OpenXR enum value 3; isolated test-directory fields moved from metadata tokens 0x0401483F/0x04014840 to 0x04014843/0x04014844. Helper 0.1.6.0 accepts only the exact verified SHA-256 hashes of 1.34.23.0 and 1.34.25.0 and uses the corresponding test-directory mapping.
+
+Both versions passed the desktop checks, startup smoke test and five library scenarios (RE3, Gothic plus RE3, arbitrary IDs with built-in overrides, empty selections, and invalid XML). The 1.34.23 build also passed all 33 bitrate server checks. On 1.34.25, an enabled bitrate configuration was explicitly tested: library overrides applied, no native bitrate hook was installed, and status reported unsupported rather than a restart requirement. This is library compatibility, not a port of the bitrate patch to 1.34.25.
+
+The helper was backed up and updated locally, retaining a valid signature on the original Streamer executable. Streamer 1.34.25's live log confirmed all 17 saved selections, including RE3 and Gothic, with its exception count increasing from 13 to 30. The updated companion app opened successfully. A separate probe using the companion's actual status classes under normal desktop permissions returned Running=True, SelectedGames=17, Applied=True and BitrateRequiresRestart=False. After reconnecting and reopening Games, the user confirmed the games appeared in the headset.
+
 ## Startup access-denied fix — 2026-10-23
 
 Windows Application event 1026 showed an unhandled Win32Exception (5) in `StreamerControl.IsRunning`, where `Process.HasExited` requested access to the already-running Streamer process during form construction. The startup log had no entry for the failed launches because construction never completed. Running-status detection now uses process enumeration without opening a synchronization handle. Library and bitrate acknowledgement checks also omit `HasExited`, retaining their process-ID/start-time identity checks and existing error handling.

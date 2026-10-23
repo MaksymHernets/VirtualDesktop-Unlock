@@ -2,7 +2,7 @@
 
 # Virtual Desktop Unlock
 
-**v0.1.5** · Windows x64 · Unofficial · MIT
+**v0.1.6** · Windows x64 · Unofficial · MIT
 
 An unofficial program for extending Virtual Desktop Streaming. Add custom Steam games, including games that use third-party VR mods, to Virtual Desktop's actual headset Games tab using the optional runtime helper. The desktop companion app organizes your installed Steam games, saves selections for the helper, and provides optional headset-specific bitrate ceilings.
 
@@ -10,7 +10,7 @@ An unofficial program for extending Virtual Desktop Streaming. Add custom Steam 
 
 | Feature | Result |
 |---|---|
-| Optional integration | Adds custom Steam IDs to Streamer's game discovery. Requires Streamer **1.34.23.0**. RE3 was confirmed in the headset and launched in VR. Gothic 1 Classic was also confirmed in the headset Games tab. |
+| Optional integration | Adds custom Steam IDs to Streamer's game discovery. Supports verified Streamer **1.34.23.0** and **1.34.25.0** binaries with helper 0.1.6.0. RE3 and Gothic were previously confirmed in the headset on 1.34.23.0. |
 | Virtual Desktop Unlock app | Add/Remove buttons, search, saving, Undo, and Steam launching. Custom additions sync to the helper's shared configuration. Restart Streamer and reconnect the headset to apply changes. |
 
 **Both the app and helper must be version 0.1.1 or later for selection syncing.** Version 0.1.0's helper added only RE3. Removing an entry removes its custom override; native VR titles can still appear automatically through Steam metadata. Adding a game does not install or enable a VR mod.
@@ -20,6 +20,8 @@ When the saved selection differs from the running helper's confirmed selection, 
 ## Download and run
 
 Version 0.1.5 fixes the startup crash caused by an access-denied Streamer status check after reboot. Upgrade the desktop app while keeping your `Data` folder. An installed helper 0.1.4.0 remains compatible and does not need reinstalling for this fix.
+
+Version 0.1.6 adds game-library support for Streamer 1.34.25.0. That Streamer update requires helper 0.1.6.0; older helpers reject it and leave custom games unapplied. Bitrate overrides remain limited to Streamer 1.34.23.0. On 1.34.25.0, the helper reports bitrate overrides as unavailable while applying game additions independently.
 
 Use the gear beside **Virtual Desktop Unlock** to open Settings. **Launch automatically when Windows starts** saves immediately for the current Windows user. Keep the app in its current folder, or disable and enable this option after moving it. Language selection remains a disabled placeholder.
 
@@ -50,7 +52,7 @@ The status block shows whether Streamer is running and the app's library is load
 Download the latest build from [Releases](https://github.com/MaksymHernets/virtual-desktop-unlock/releases), or build this source, and extract it to a writable folder. The 0.1.0 release does not include selection syncing.
 
 - Open **Virtual Desktop Unlock.exe** to use the companion app. Requires **.NET Desktop Runtime 10**. No administrator permission is needed for this app.
-- Install the optional integration separately using **Install RE3 Integration.cmd**. This requests Administrator permission and briefly restarts Streamer. Requires the exact supported Streamer 1.34.23.0 binary and .NET Framework 4.7.1 or later (4.8 is suitable).
+- Install the optional integration separately using **Install RE3 Integration.cmd**. This requests Administrator permission and briefly restarts Streamer. Requires an exact supported Streamer 1.34.23.0 or 1.34.25.0 binary and .NET Framework 4.7.1 or later (4.8 is suitable).
 - Install REFramework's VR mod for RE3 yourself. This project does not install the game or its mod.
 
 After installing the integration, reconnect Virtual Desktop in the headset and reopen **Games**. Launch **Resident Evil 3** from there.

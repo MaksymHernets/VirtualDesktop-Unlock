@@ -2,7 +2,7 @@
 param([string]$StreamerPath,[switch]$SkipTests)
 $ErrorActionPreference='Stop'
 $root=$PSScriptRoot
-$version='0.1.5'
+$version='0.1.6'
 $env:DOTNET_CLI_HOME=Join-Path $root '.dotnet-build'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT='1'
 $env:DOTNET_GENERATE_ASPNET_CERTIFICATE='false'
@@ -21,7 +21,7 @@ $references=@("/reference:$framework\WPF\PresentationFramework.dll","/reference:
 & $compiler /nologo /target:library ('/out:'+(Join-Path $hook 'VirtualDesktop.LibraryOverrides.dll')) $references (Join-Path $root 'src\RuntimeOverrides\LibraryOverrides.cs') (Join-Path $root 'src\RuntimeOverrides\BitrateRuntime.cs') (Join-Path $root 'Shared\BitrateConfiguration.cs')
 if($LASTEXITCODE -ne 0){throw 'Runtime helper build failed.'}
 Copy-Item -LiteralPath (Join-Path $root 'src\RuntimeOverrides\RuntimeHook.config') -Destination (Join-Path $hook 'VirtualDesktop.Streamer.exe.config')
-[pscustomobject]@{Version=$version;StreamerVersion='1.34.23.0';StreamerSHA256='FEAD548C57DF539006E6C97A7A29D46FDE172F756F40D65DBDB77ABAAFA3AEAD';HelperSHA256=(Get-FileHash -LiteralPath (Join-Path $hook 'VirtualDesktop.LibraryOverrides.dll')).Hash;ConfigSHA256=(Get-FileHash -LiteralPath (Join-Path $hook 'VirtualDesktop.Streamer.exe.config')).Hash} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $hook 'manifest.json')
+[pscustomobject]@{Version=$version;StreamerVersion='1.34.25.0';StreamerSHA256='0229A322137F55687240D2B51F5F7002056D9277D7FA001EC6CB4EB25AF0BFB8';SupportedStreamers=@(@{Version='1.34.23.0';SHA256='FEAD548C57DF539006E6C97A7A29D46FDE172F756F40D65DBDB77ABAAFA3AEAD'},@{Version='1.34.25.0';SHA256='0229A322137F55687240D2B51F5F7002056D9277D7FA001EC6CB4EB25AF0BFB8'});HelperSHA256=(Get-FileHash -LiteralPath (Join-Path $hook 'VirtualDesktop.LibraryOverrides.dll')).Hash;ConfigSHA256=(Get-FileHash -LiteralPath (Join-Path $hook 'VirtualDesktop.Streamer.exe.config')).Hash} | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $hook 'manifest.json')
 if(!$SkipTests){
     $test=Start-Process -FilePath (Join-Path $publish 'Virtual Desktop Unlock.exe') -ArgumentList '--self-test' -WindowStyle Hidden -PassThru
     $test.WaitForExit()
@@ -63,8 +63,18 @@ if(!$SkipTests){
             try{
                 $env:VD_BITRATE_TEST='1'; $env:VD_BITRATE_CONFIG=Join-Path $tests 'BitrateOverrides.xml'; $env:VD_BITRATE_STATUS=Join-Path $tests 'BitrateStatus.xml'
                 $env:VD_LIBRARY_OVERRIDES_FILE=Join-Path $tests 're3.xml'; $env:VD_LIBRARY_OVERRIDE_LOG=Join-Path $tests 'bitrate-hook.log'
-                & (Join-Path $tests 'BitrateHookTest.exe') ([IO.Path]::GetFullPath($StreamerPath))
-                if($LASTEXITCODE -ne 0){throw 'Bitrate server tests failed.'}
+                if([Diagnostics.FileVersionInfo]::GetVersionInfo($StreamerPath).FileVersion -eq '1.34.23.0'){
+                    & (Join-Path $tests 'BitrateHookTest.exe') ([IO.Path]::GetFullPath($StreamerPath))
+                    if($LASTEXITCODE -ne 0){throw 'Bitrate server tests failed.'}
+                }else{
+                    $env:VD_LIBRARY_TEST_DELAYED=$null;$env:VD_LIBRARY_TEST_EXPECTED_IDS='952060'
+                    '<BitrateOverrides version="1" enabled="true"><Profile headset="1000" h264="1000" hevc="300" av1="250"/></BitrateOverrides>' | Set-Content -LiteralPath $env:VD_BITRATE_CONFIG
+                    & (Join-Path $tests 'RuntimeHookTest.exe') ([IO.Path]::GetFullPath($StreamerPath))
+                    if($LASTEXITCODE -ne 0){throw 'Library override failed with unsupported bitrate configuration.'}
+                    [xml]$bitrateStatus=Get-Content -LiteralPath $env:VD_BITRATE_STATUS -Raw
+                    if($bitrateStatus.BitrateStatus.unsupported -ne 'true' -or $bitrateStatus.BitrateStatus.ready -ne 'false'){throw 'Unsupported bitrate version did not report its limitation.'}
+                    'PASS Unsupported bitrate patch stays inactive while game-library overrides apply'
+                }
             }finally{$env:VD_BITRATE_TEST=$savedBitrateTest;$env:VD_BITRATE_CONFIG=$savedBitrateConfig;$env:VD_BITRATE_STATUS=$savedBitrateStatus}
         }finally{
             $env:VD_LIBRARY_TEST_DATA=$oldData;$env:VD_LIBRARY_TEST_DELAYED=$oldDelay;$env:VD_LIBRARY_OVERRIDE_LOG=$oldLog

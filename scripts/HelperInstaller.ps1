@@ -30,7 +30,8 @@ New-Item -ItemType Directory -Path $logFolder -Force | Out-Null
 Start-Transcript -LiteralPath (Join-Path $logFolder 'installer.log') -Append | Out-Null
 try{
     if(!(Test-Path -LiteralPath $exe)){throw 'Virtual Desktop Streamer was not found.'}
-    if(!$Uninstall -and (Get-FileHash -LiteralPath $exe).Hash -ne $manifest.StreamerSHA256){throw ('Unsupported Streamer binary. This release supports only '+$manifest.StreamerVersion+'. No installation files were changed.')}
+    $supportedHashes=if($manifest.SupportedStreamers){@($manifest.SupportedStreamers | ForEach-Object {$_.SHA256})}else{@($manifest.StreamerSHA256)}
+    if(!$Uninstall -and (Get-FileHash -LiteralPath $exe).Hash -notin $supportedHashes){throw 'Unsupported Streamer binary. Library integration supports verified 1.34.23.0 and 1.34.25.0 builds. No installation files were changed.'}
     if((Get-AuthenticodeSignature -LiteralPath $exe).Status -ne 'Valid'){throw 'Streamer must have a valid developer signature.'}
     $record=if(Test-Path -LiteralPath $recordPath){Get-Content -LiteralPath $recordPath -Raw | ConvertFrom-Json}else{$null}
     if($Uninstall){
@@ -63,7 +64,7 @@ try{
         Copy-Item -LiteralPath (Join-Path $payload 'VirtualDesktop.Streamer.exe.config') -Destination $config -Force
         $process=Start-Process -FilePath $exe -WorkingDirectory $StreamerDirectory -WindowStyle Hidden -PassThru
         if($process.WaitForExit(4000)){throw ('Streamer exited during startup: '+$process.ExitCode)}
-        if((Get-FileHash -LiteralPath $exe).Hash -ne $manifest.StreamerSHA256){throw 'Streamer executable changed unexpectedly.'}
+        if((Get-FileHash -LiteralPath $exe).Hash -notin $supportedHashes){throw 'Streamer executable changed unexpectedly.'}
         [pscustomobject]@{Product='Virtual Desktop Unlock';Version=$manifest.Version;HelperSHA256=$manifest.HelperSHA256;ConfigSHA256=$manifest.ConfigSHA256;Installed=[DateTimeOffset]::Now.ToString('O')} | ConvertTo-Json | Set-Content -LiteralPath $recordPath
         'Installed RE3 integration. Reconnect the headset and reopen Virtual Desktop Games.'
     }catch{
